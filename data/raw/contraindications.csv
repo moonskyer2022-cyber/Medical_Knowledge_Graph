@@ -1,0 +1,16 @@
+drug_id,condition_type,condition,severity,description
+D004,disease,严重肾功能不全,major,eGFR<30时禁用二甲双胍
+D004,disease,乳酸酸中毒,major,既往乳酸酸中毒病史禁用
+D001,disease,活动性消化性溃疡,major,增加消化道出血风险
+D001,population,儿童水痘或流感,major,可能诱发Reye综合征
+D005,disease,活动性肝病,major,他汀类禁用于活动性肝病
+D005,disease,妊娠期,major,他汀类禁用于妊娠期
+D008,disease,严重心动过缓,major,心率<45次/分禁用
+D008,disease,二度以上房室传导阻滞,major,β受体阻滞剂禁用于严重传导阻滞
+D003,disease,妊娠期,major,ARB禁用于妊娠期
+D011,disease,妊娠期,major,ARB禁用于妊娠期
+D015,disease,妊娠期,major,ACEI禁用于妊娠期
+D015,disease,双侧肾动脉狭窄,major,ACEI可能导致急性肾衰竭
+D010,disease,1型糖尿病,moderate,磺脲类主要用于2型糖尿病
+D014,disease,炎症性肠病,moderate,阿卡波糖可能加重胃肠道症状
+D006,disease,对PPI过敏,major,已知过敏者禁用

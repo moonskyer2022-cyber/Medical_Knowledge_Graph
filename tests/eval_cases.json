@@ -1,0 +1,12 @@
+[
+  {"type": "recommend", "name": "高血压推荐", "query": {"disease": "高血压"}, "expect_drugs": ["氨氯地平", "缬沙坦", "美托洛尔"], "expect_icd": "I10", "expect_min_count": 1},
+  {"type": "recommend", "name": "糖尿病推荐", "query": {"disease": "糖尿病"}, "expect_drugs": ["二甲双胍"], "expect_icd": "E11"},
+  {"type": "recommend", "name": "ICD高脂血症", "query": {"icd": "E78.5"}, "expect_drugs": ["阿托伐他汀", "瑞舒伐他汀"], "expect_disease": "高脂血症"},
+  {"type": "recommend", "name": "冠心病推荐", "query": {"disease": "冠心病"}, "expect_drugs": ["阿司匹林", "氯吡格雷"], "expect_icd": "I25"},
+  {"type": "recommend", "name": "胃食管反流", "query": {"disease": "胃食管反流"}, "expect_drugs": ["奥美拉唑", "雷贝拉唑"], "expect_icd": "K21"},
+  {"type": "interaction", "name": "ARB重复联用", "drugs": ["缬沙坦", "厄贝沙坦"], "expect_interaction": true, "expect_severity": "major"},
+  {"type": "interaction", "name": "双抗联用", "drugs": ["阿司匹林", "氯吡格雷"], "expect_interaction": true, "expect_severity": "moderate"},
+  {"type": "interaction", "name": "氨氯地平辛伐他汀", "drugs": ["氨氯地平", "辛伐他汀"], "expect_interaction": true},
+  {"type": "qa", "name": "QA联用", "question": "阿司匹林和氯吡格雷能一起吃吗？", "expect_intent": "interaction_check", "expect_answer_contains": ["氯吡格雷"]},
+  {"type": "qa", "name": "QA推荐", "question": "高血压推荐什么方案？", "expect_intent": "recommend", "expect_answer_contains": ["高血压"]}
+]
