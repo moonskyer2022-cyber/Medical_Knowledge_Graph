@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PharmaKG · 临床用药决策支持</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+    <!-- 侧边导航 -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">Rx</div>
+        <div>
+          <strong>PharmaKG</strong>
+          <span>临床决策支持</span>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-view="dashboard">
+          <span class="nav-icon">◈</span>
+          <span class="nav-text">工作台</span>
+        </button>
+        <button class="nav-item" data-view="clinical">
+          <span class="nav-icon">◉</span>
+          <span class="nav-text">用药评估</span>
+          <span class="nav-badge">核心</span>
+        </button>
+        <button class="nav-item" data-view="recommend">
+          <span class="nav-icon">▣</span>
+          <span class="nav-text">方案推荐</span>
+        </button>
+        <button class="nav-item" data-view="prescription">
+          <span class="nav-icon">⚠</span>
+          <span class="nav-text">处方审核</span>
+        </button>
+        <button class="nav-item" data-view="drug">
+          <span class="nav-icon">⊕</span>
+          <span class="nav-text">药品查阅</span>
+        </button>
+        <button class="nav-item" data-view="comorbidity">
+          <span class="nav-icon">⊞</span>
+          <span class="nav-text">合并症管理</span>
+        </button>
+        <button class="nav-item" data-view="qa">
+          <span class="nav-icon">?</span>
+          <span class="nav-text">智能助手</span>
+        </button>
+      </nav>
+      <div class="sidebar-stats">
+        <div class="sidebar-stat"><span>药品</span><strong id="statDrugs">-</strong></div>
+        <div class="sidebar-stat"><span>疾病</span><strong id="statDiseases">-</strong></div>
+        <div class="sidebar-stat"><span>相互作用</span><strong id="statInteractions">-</strong></div>
+      </div>
+      <div class="sidebar-status" id="statusBadge">
+        <span class="status-dot"></span>
+        <span id="statusText">连接中...</span>
+      </div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <div class="main-area">
+      <div class="disclaimer-bar">
+        <span class="disclaimer-icon">!</span>
+        本系统仅供临床决策辅助参考，不能替代执业医师专业判断。最终用药决策需结合患者个体情况。
+      </div>
+
+      <!-- 工作台 -->
+      <section class="view active" id="view-dashboard">
+        <header class="view-header">
+          <h1>临床工作台</h1>
+          <p>选择典型业务场景快速开始，或从左侧导航进入对应模块</p>
+        </header>
+        <div class="scenario-grid">
+          <article class="scenario-card" data-scenario="clinical-htn-dm">
+            <div class="scenario-tag">高频场景</div>
+            <h3>合并症用药评估</h3>
+            <p>高血压 + 2 型糖尿病老年患者，评估方案叠加与联用风险</p>
+            <span class="scenario-meta">用药评估 · 合并症 + 冲突检测</span>
+          </article>
+          <article class="scenario-card" data-scenario="prescription-dapt">
+            <div class="scenario-tag warn">审核</div>
+            <h3>双抗方案审核</h3>
+            <p>冠心病患者阿司匹林 + 氯吡格雷联用，评估出血风险</p>
+            <span class="scenario-meta">处方审核 · 相互作用</span>
+          </article>
+          <article class="scenario-card" data-scenario="prescription-arb">
+            <div class="scenario-tag danger">警示</div>
+            <h3>ARB 重复用药</h3>
+            <p>缬沙坦与厄贝沙坦同时使用，检测同类药叠加</p>
+            <span class="scenario-meta">处方审核 · 同类重复</span>
+          </article>
+          <article class="scenario-card" data-scenario="recommend-htn">
+            <div class="scenario-tag">推荐</div>
+            <h3>高血压一线方案</h3>
+            <p>按指南查询原发性高血压一线治疗及证据等级</p>
+            <span class="scenario-meta">方案推荐 · 证据 A 级</span>
+          </article>
+          <article class="scenario-card" data-scenario="drug-metformin">
+            <div class="scenario-tag">查阅</div>
+            <h3>二甲双胍说明书</h3>
+            <p>查阅适应症、用法用量、禁忌及不良反应</p>
+            <span class="scenario-meta">药品查阅 · 完整档案</span>
+          </article>
+          <article class="scenario-card" data-scenario="qa-interaction">
+            <div class="scenario-tag">问答</div>
+            <h3>快速临床提问</h3>
+            <p>自然语言询问联用、推荐、适应症等问题</p>
+            <span class="scenario-meta">智能助手</span>
+          </article>
+        </div>
+        <div class="dashboard-stats">
+          <article class="dash-stat"><span>治疗方案</span><strong id="statPlans">-</strong></article>
+          <article class="dash-stat"><span>禁忌记录</span><strong id="statContraindications">-</strong></article>
+          <article class="dash-stat"><span>不良反应</span><strong id="statAdverse">-</strong></article>
+          <article class="dash-stat"><span>治疗关系</span><strong id="statTreats">-</strong></article>
+        </div>
+      </section>
+
+      <!-- 临床用药评估（核心业务流程） -->
+      <section class="view" id="view-clinical">
+        <header class="view-header">
+          <h1>临床用药评估</h1>
+          <p>模拟真实门诊场景：录入诊断与当前用药 → 获取方案建议 → 自动检测联用风险</p>
+        </header>
+        <div class="workflow-steps">
+          <div class="step active"><span>1</span> 录入信息</div>
+          <div class="step-line"></div>
+          <div class="step"><span>2</span> 方案分析</div>
+          <div class="step-line"></div>
+          <div class="step"><span>3</span> 风险评估</div>
+        </div>
+        <form class="clinical-form" id="clinicalForm">
+          <div class="form-grid">
+            <div class="field">
+              <label>诊断疾病 <small>支持多个，逗号分隔</small></label>
+              <input id="clinicalDiseases" list="diseaseList" placeholder="高血压, 2型糖尿病" value="">
+              <datalist id="diseaseList"></datalist>
+            </div>
+            <div class="field">
+              <label>特殊注意 <small>可选</small></label>
+              <select id="clinicalCondition">
+                <option value="">无特殊禁忌</option>
+                <option value="妊娠期">妊娠期</option>
+                <option value="严重肾功能不全">严重肾功能不全</option>
+                <option value="活动性消化性溃疡">活动性消化性溃疡</option>
+                <option value="活动性肝病">活动性肝病</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label>当前用药清单 <small>输入药品名后按 Enter 或点击添加</small></label>
+            <div class="chip-input-wrap">
+              <div class="chip-list" id="clinicalDrugChips"></div>
+              <input id="clinicalDrugInput" list="drugList" placeholder="输入药品名称..." autocomplete="off">
+              <datalist id="drugList"></datalist>
+              <button type="button" class="btn ghost" id="addClinicalDrug">添加</button>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn primary">开始全面评估</button>
+            <button type="button" class="btn ghost" id="clinicalDemo">加载示例病例</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- 方案推荐 -->
+      <section class="view" id="view-recommend">
+        <header class="view-header">
+          <h1>治疗方案推荐</h1>
+          <p>按疾病名称或 ICD 编码查询指南推荐方案，含证据等级与用法用量</p>
+        </header>
+        <form class="search-form" id="recommendForm">
+          <div class="field">
+            <label for="diseaseInput">疾病名称</label>
+            <input id="diseaseInput" list="diseaseList2" placeholder="高血压、糖尿病">
+            <datalist id="diseaseList2"></datalist>
+          </div>
+          <div class="field narrow">
+            <label for="icdInput">ICD 编码</label>
+            <input id="icdInput" placeholder="I10、E11">
+          </div>
+          <button type="submit" class="btn primary">查询方案</button>
+        </form>
+        <div class="quick-tags" id="diseaseTags"></div>
+      </section>
+
+      <!-- 处方审核 -->
+      <section class="view" id="view-prescription">
+        <header class="view-header">
+          <h1>处方审核</h1>
+          <p>药师审方场景：录入处方药品清单，检测相互作用与同类重复用药</p>
+        </header>
+        <form class="search-form" id="prescriptionForm">
+          <div class="field full">
+            <label>处方药品 <small>至少两种，输入后按 Enter 添加</small></label>
+            <div class="chip-input-wrap">
+              <div class="chip-list" id="prescriptionChips"></div>
+              <input id="prescriptionInput" list="drugList2" placeholder="输入药品名称..." autocomplete="off">
+              <datalist id="drugList2"></datalist>
+              <button type="button" class="btn ghost" id="addPrescriptionDrug">添加</button>
+            </div>
+          </div>
+          <button type="submit" class="btn primary">提交审核</button>
+        </form>
+        <div class="quick-tags" id="prescriptionTags"></div>
+      </section>
+
+      <!-- 药品查阅 -->
+      <section class="view" id="view-drug">
+        <header class="view-header">
+          <h1>药品信息查阅</h1>
+          <p>查询药品适应症、用法用量、不良反应、禁忌症及 ATC 分类</p>
+        </header>
+        <form class="search-form" id="drugForm">
+          <div class="field full">
+            <label for="drugInput">药品名称</label>
+            <input id="drugInput" list="drugList3" placeholder="通用名、商品名或别名">
+            <datalist id="drugList3"></datalist>
+          </div>
+          <button type="submit" class="btn primary">查阅</button>
+        </form>
+        <div class="quick-tags" id="drugTags"></div>
+      </section>
+
+      <!-- 合并症管理 -->
+      <section class="view" id="view-comorbidity">
+        <header class="view-header">
+          <h1>合并症管理</h1>
+          <p>多病共存患者：汇总各病治疗方案并检测交叉用药冲突</p>
+        </header>
+        <form class="search-form" id="comorbidityForm">
+          <div class="field full">
+            <label for="comorbidityInput">合并疾病</label>
+            <input id="comorbidityInput" placeholder="高血压, 冠心病, 高脂血症">
+          </div>
+          <button type="submit" class="btn primary">分析合并方案</button>
+        </form>
+      </section>
+
+      <!-- 智能助手 -->
+      <section class="view" id="view-qa">
+        <header class="view-header">
+          <h1>智能临床助手</h1>
+          <p>自然语言提问：联用检测、方案推荐、适应症查询、禁忌咨询</p>
+        </header>
+        <form class="search-form" id="qaForm">
+          <div class="field full">
+            <label for="qaInput">临床问题</label>
+            <input id="qaInput" placeholder="例如：阿司匹林和氯吡格雷能一起吃吗？">
+          </div>
+          <button type="submit" class="btn primary">提问</button>
+        </form>
+        <div class="quick-tags" id="qaTags"></div>
+      </section>
+
+      <!-- 结果区（所有视图共享） -->
+      <section class="results-section" id="resultsSection" hidden>
+        <div class="results-toolbar">
+          <div class="results-toolbar-left">
+            <h2 id="resultsTitle">评估报告</h2>
+            <span class="badge" id="resultsCount"></span>
+          </div>
+          <div class="results-toolbar-right">
+            <button type="button" class="btn ghost sm" id="printResults">打印报告</button>
+            <button type="button" class="btn ghost sm" id="clearResults">清除</button>
+          </div>
+        </div>
+        <div id="riskBanner" class="risk-banner" hidden></div>
+        <div class="content-grid">
+          <div class="panel results-panel">
+            <div id="resultsBody" class="results-body"></div>
+          </div>
+          <div class="panel graph-panel">
+            <div class="panel-head">
+              <h3>知识关联图谱</h3>
+              <div class="legend">
+                <span><i class="dot disease"></i>疾病</span>
+                <span><i class="dot plan"></i>方案</span>
+                <span><i class="dot drug"></i>药品</span>
+                <span><i class="dot effect"></i>不良反应</span>
+              </div>
+            </div>
+            <div id="graphContainer"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="loading-overlay" id="loadingOverlay" hidden>
+    <div class="loading-spinner"></div>
+    <span>正在查询知识图谱...</span>
+  </div>
+
+  <footer class="footer">PharmaKG v1.0 · 基于 Neo4j 知识图谱 · 数据来源：中国临床指南共识</footer>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
