@@ -8,6 +8,7 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
+.pydeps/
 
 .DS_Store
 Thumbs.db
@@ -16,3 +17,5 @@ node_modules/
 
 dist/
 build/
+
+医药知识图谱-*.md

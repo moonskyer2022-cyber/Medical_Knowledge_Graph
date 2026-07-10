@@ -41,21 +41,23 @@ const els = {
   drugTags: document.getElementById("drugTags"),
   prescriptionTags: document.getElementById("prescriptionTags"),
   qaTags: document.getElementById("qaTags"),
+  jumpWorkbench: document.getElementById("jumpWorkbench"),
+  runIntroScenario: document.getElementById("runIntroScenario"),
 };
 
 const graphGroups = {
-  disease: { color: { background: "#dbeafe", border: "#2563eb" }, shape: "dot", size: 22 },
-  category: { color: { background: "#e0e7ff", border: "#4338ca" }, shape: "ellipse", size: 20 },
-  plan: { color: { background: "#ede9fe", border: "#7c3aed" }, shape: "box" },
-  drug: { color: { background: "#d1fae5", border: "#059669" }, shape: "dot", size: 18 },
-  effect: { color: { background: "#fee2e2", border: "#dc2626" }, shape: "triangle", size: 16 },
+  disease: { color: { background: "#d7e8ff", border: "#3278c9" }, shape: "dot", size: 22 },
+  category: { color: { background: "#ece3ff", border: "#8a6ad9" }, shape: "ellipse", size: 18 },
+  plan: { color: { background: "#ffe6d6", border: "#b45a2d" }, shape: "box" },
+  drug: { color: { background: "#dff4e8", border: "#1f8d62" }, shape: "dot", size: 18 },
+  effect: { color: { background: "#f9ded6", border: "#c25b42" }, shape: "triangle", size: 16 },
 };
 
 const SCENARIOS = {
   "clinical-htn-dm": {
     view: "clinical",
     diseases: "高血压, 2型糖尿病",
-    drugs: ["二甲双胍", "氨氯地平"],
+    drugs: ["二甲双胍", "氨氯地平", "阿司匹林"],
     condition: "",
   },
   "prescription-dapt": {
@@ -80,28 +82,55 @@ const SCENARIOS = {
   },
 };
 
-// ===== Utilities =====
+function lineLabel(line) {
+  return { first: "一线", second: "二线" }[line] || line || "未知";
+}
+
+function severityLabel(severity) {
+  return {
+    major: "严重",
+    moderate: "中等",
+    minor: "轻度",
+    mild: "轻度",
+  }[severity] || severity || "-";
+}
+
+function frequencyLabel(frequency) {
+  return {
+    common: "常见",
+    uncommon: "偶见",
+    rare: "罕见",
+  }[frequency] || frequency || "-";
+}
+
+function evidenceChip(level) {
+  if (!level) return `<span class="chip">证据等级 -</span>`;
+  const cls = level === "A" ? "evidence-a" : level === "B" ? "evidence-b" : "";
+  return `<span class="chip ${cls}">证据 ${level}</span>`;
+}
 
 async function fetchJSON(url, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeout ?? 15000);
+
   try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(typeof err.detail === "string" ? err.detail : "请求失败");
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(typeof error.detail === "string" ? error.detail : "请求失败");
     }
-    return res.json();
-  } catch (err) {
-    if (err.name === "AbortError") throw new Error("请求超时，请检查 Neo4j 是否正常运行");
-    throw err;
+    return response.json();
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error("请求超时，请检查 API 或 Neo4j 是否已经正常启动");
+    }
+    throw error;
   } finally {
     clearTimeout(timeout);
   }
 }
 
 function showLoading(show) {
-  if (!els.loadingOverlay) return;
   els.loadingOverlay.hidden = !show;
 }
 
@@ -111,29 +140,11 @@ function setStatus(ok, text) {
   els.statusText.textContent = text;
 }
 
-function lineLabel(line) {
-  return { first: "一线", second: "二线" }[line] || line || "未知";
-}
-
-function severityLabel(sev) {
-  return { major: "严重", moderate: "中等", minor: "轻微", mild: "轻度" }[sev] || sev || "-";
-}
-
-function freqLabel(freq) {
-  return { common: "常见", uncommon: "偶见", rare: "罕见" }[freq] || freq || "-";
-}
-
-function evidenceChip(level) {
-  if (!level) return `<span class="chip">证据: -</span>`;
-  const cls = level === "A" ? "evidence-a" : level === "B" ? "evidence-b" : "";
-  return `<span class="chip ${cls}">证据 ${level} 级</span>`;
-}
-
 function showResults(title, countText, badgeClass = "") {
   els.resultsSection.hidden = false;
   els.resultsTitle.textContent = title;
   els.resultsCount.textContent = countText;
-  els.resultsCount.className = "badge" + (badgeClass ? ` ${badgeClass}` : "");
+  els.resultsCount.className = `results-badge${badgeClass ? ` ${badgeClass}` : ""}`;
   els.resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -153,39 +164,39 @@ function renderEmpty(message, hint = "") {
     <div class="empty-state">
       <p>${message}</p>
       ${hint ? `<p class="muted">${hint}</p>` : ""}
-    </div>`;
+    </div>
+  `;
 }
 
 function renderError(message) {
   hideRiskBanner();
-  showResults("查询失败", "错误", "danger");
+  showResults("查询失败", "错误");
   els.resultsBody.innerHTML = `<div class="error-box">${message}</div>`;
 }
 
 function updateWorkflowStep(step) {
-  document.querySelectorAll(".workflow-steps .step").forEach((el, i) => {
-    el.classList.remove("active", "done");
-    if (i + 1 < step) el.classList.add("done");
-    else if (i + 1 === step) el.classList.add("active");
+  document.querySelectorAll(".workflow-steps .step").forEach((element, index) => {
+    element.classList.remove("active", "done");
+    if (index + 1 < step) element.classList.add("done");
+    if (index + 1 === step) element.classList.add("active");
   });
 }
-
-// ===== Chip Input =====
 
 function renderChips(store, container) {
   container.innerHTML = chipStores[store]
     .map(
-      (name, i) => `
-      <span class="drug-chip">
-        ${name}
-        <button type="button" data-store="${store}" data-index="${i}" aria-label="移除">×</button>
-      </span>`
+      (name, index) => `
+        <span class="drug-chip">
+          ${name}
+          <button type="button" data-store="${store}" data-index="${index}" aria-label="删除">×</button>
+        </span>
+      `
     )
     .join("");
 }
 
-function addChip(store, name) {
-  const trimmed = name.trim();
+function addChip(store, value) {
+  const trimmed = value.trim();
   if (!trimmed || chipStores[store].includes(trimmed)) return;
   chipStores[store].push(trimmed);
   const container = store === "clinical" ? els.clinicalDrugChips : els.prescriptionChips;
@@ -198,309 +209,328 @@ function removeChip(store, index) {
   renderChips(store, container);
 }
 
-function setupChipInput(inputEl, store, container) {
+function setupChipInput(inputElement, store, container) {
   const add = () => {
-    if (inputEl.value.trim()) {
-      addChip(store, inputEl.value);
-      inputEl.value = "";
+    if (inputElement.value.trim()) {
+      addChip(store, inputElement.value);
+      inputElement.value = "";
     }
   };
-  inputEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { e.preventDefault(); add(); }
+
+  inputElement.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      add();
+    }
   });
-  container.addEventListener("click", (e) => {
-    const btn = e.target.closest("button[data-store]");
-    if (btn) removeChip(btn.dataset.store, parseInt(btn.dataset.index, 10));
+
+  container.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-store]");
+    if (!button) return;
+    removeChip(button.dataset.store, Number.parseInt(button.dataset.index, 10));
   });
+
   return add;
 }
 
-// ===== Renderers =====
-
 function renderRecommendResults(data) {
   if (!data.count) {
-    showResults("方案推荐", "0 条");
-    showRiskBanner("warn", "ℹ", "未找到匹配方案，请尝试其他疾病名称或 ICD 编码");
+    showResults("治疗方案推荐", "0 条结果");
+    showRiskBanner("warn", "!" , "没有查到匹配方案，请尝试更换疾病名称或 ICD 编码");
     renderEmpty("暂无推荐方案");
     return;
   }
 
   showResults("治疗方案推荐", `${data.count} 条方案`);
-  showRiskBanner("safe", "✓", `共找到 ${data.count} 套指南推荐方案，已按治疗线别与证据等级排序`);
+  showRiskBanner("safe", "✓", `已找到 ${data.count} 个候选方案，结果已按治疗线别与证据等级排序`);
 
   els.resultsBody.innerHTML = data.results
     .map((item) => {
       const drugs = (item.drugs || [])
         .map(
-          (d) => `
-          <div class="drug-item">
-            <strong>${d.generic_name}</strong>
-            ${d.brand_name ? `<span> / ${d.brand_name}</span>` : ""}
-            ${d.dose ? `<div class="muted">${d.dose} · ${d.frequency || ""} · ${d.route || "口服"}</div>` : ""}
-            ${d.atc ? `<div class="muted">ATC ${d.atc}</div>` : ""}
-          </div>`
+          (drug) => `
+            <div class="drug-item">
+              <strong>${drug.generic_name || "-"}</strong>
+              ${drug.brand_name ? `<span>${drug.brand_name}</span>` : ""}
+              ${drug.dose ? `<div class="muted">${drug.dose} · ${drug.frequency || ""} · ${drug.route || "口服"}</div>` : ""}
+            </div>
+          `
         )
         .join("");
 
       return `
         <article class="result-card ${item.line === "first" ? "safe-card" : ""}">
-          <h3>${item.plan}</h3>
+          <h3>${item.plan || "未命名方案"}</h3>
           <div class="meta">
-            <span class="chip">${item.disease}</span>
+            <span class="chip">${item.disease || "-"}</span>
             <span class="chip">ICD ${item.icd || "-"}</span>
             <span class="chip ${item.line === "first" ? "line-first" : ""}">${lineLabel(item.line)}</span>
             ${evidenceChip(item.evidence_level)}
-            <span class="chip">${item.population || "-"}</span>
+            <span class="chip">${item.population || "未标注人群"}</span>
           </div>
-          ${item.plan_description ? `<p style="font-size:0.85rem;color:var(--muted);margin:0 0 10px">${item.plan_description}</p>` : ""}
+          ${item.plan_description ? `<p class="muted">${item.plan_description}</p>` : ""}
           <h4>方案用药</h4>
-          <div class="drug-list">${drugs}</div>
-          <div class="meta" style="margin-top:10px;margin-bottom:0">
-            <span class="chip" style="font-size:0.75rem">来源：${item.source || "-"}</span>
-          </div>
-        </article>`;
+          <div class="drug-list">${drugs || '<span class="muted">暂无药物信息</span>'}</div>
+        </article>
+      `;
     })
     .join("");
 }
 
 function renderDrugResults(data) {
   if (!data.count) {
-    showResults("药品查阅", "未找到", "danger");
-    renderEmpty("未找到该药品");
+    showResults("药品详情查询", "未找到");
+    renderEmpty("没有找到对应药品");
     return;
   }
 
-  showResults("药品信息", data.results[0].drug, "");
+  const primary = data.results[0];
+  showResults("药品详情", primary.drug || "药品");
 
   els.resultsBody.innerHTML = data.results
     .map((item) => {
       const diseases = (item.diseases || [])
-        .filter((d) => d.disease)
+        .filter((entry) => entry.disease)
         .map(
-          (d) => `
-          <div class="disease-item">
-            <strong>${d.disease}</strong>
-            <div class="meta">
-              <span class="chip">ICD ${d.icd || "-"}</span>
-              <span class="chip ${d.line === "first" ? "line-first" : ""}">${lineLabel(d.line)}</span>
-              ${d.dose ? `<span class="chip">${d.dose} ${d.frequency || ""}</span>` : ""}
+          (entry) => `
+            <div class="disease-item">
+              <strong>${entry.disease}</strong>
+              <div class="meta">
+                <span class="chip">ICD ${entry.icd || "-"}</span>
+                <span class="chip ${entry.line === "first" ? "line-first" : ""}">${lineLabel(entry.line)}</span>
+                ${entry.dose ? `<span class="chip">${entry.dose} ${entry.frequency || ""}</span>` : ""}
+              </div>
             </div>
-          </div>`
+          `
         )
         .join("");
 
       const effects = (item.adverse_effects || [])
-        .filter((e) => e.effect)
-        .map((e) => `<span class="chip warn">${e.effect}（${freqLabel(e.frequency)}）</span>`)
+        .filter((entry) => entry.effect)
+        .map((entry) => `<span class="chip warn">${entry.effect} · ${frequencyLabel(entry.frequency)}</span>`)
         .join("");
 
-      const contra = (item.contraindications || [])
-        .filter((c) => c.condition)
-        .map((c) => `<span class="chip danger">${c.condition} — ${severityLabel(c.severity)}</span>`)
+      const contraindications = (item.contraindications || [])
+        .filter((entry) => entry.condition)
+        .map((entry) => `<span class="chip danger">${entry.condition} · ${severityLabel(entry.severity)}</span>`)
         .join("");
-
-      const majorContra = (item.contraindications || []).filter((c) => c.severity === "major").length;
-
-      if (majorContra) {
-        showRiskBanner("danger", "⚠", `该药品有 ${majorContra} 项严重禁忌，处方前请务必核对`);
-      }
 
       return `
         <article class="result-card">
-          <h3>${item.drug}${item.brand ? `（${item.brand}）` : ""}</h3>
+          <h3>${item.drug || "-"}${item.brand ? ` / ${item.brand}` : ""}</h3>
           <div class="meta">
             <span class="chip">ATC ${item.atc || "-"}</span>
-            <span class="chip">${item.atc_name || ""}</span>
-            <span class="chip">${item.dosage_form || ""}</span>
+            ${item.atc_name ? `<span class="chip">${item.atc_name}</span>` : ""}
+            ${item.dosage_form ? `<span class="chip">${item.dosage_form}</span>` : ""}
             ${item.manufacturer ? `<span class="chip">${item.manufacturer}</span>` : ""}
           </div>
           <h4>适应症</h4>
-          <div class="disease-list">${diseases || '<span class="muted">无记录</span>'}</div>
+          <div class="disease-list">${diseases || '<span class="muted">暂无适应症记录</span>'}</div>
           <h4>不良反应</h4>
-          <div class="meta">${effects || '<span class="muted">无记录</span>'}</div>
-          <h4>禁忌 / 慎用</h4>
-          <div class="meta">${contra || '<span class="muted">无记录</span>'}</div>
-        </article>`;
+          <div class="meta">${effects || '<span class="muted">暂无不良反应记录</span>'}</div>
+          <h4>禁忌与慎用</h4>
+          <div class="meta">${contraindications || '<span class="muted">暂无禁忌记录</span>'}</div>
+        </article>
+      `;
     })
     .join("");
 }
 
-function renderInteractionResults(data, title = "处方审核报告") {
-  const major = (data.interactions || []).filter((i) => i.severity === "major").length;
-  const moderate = (data.interactions || []).filter((i) => i.severity === "moderate").length;
-  const dupCount = (data.duplicate_classes || []).length;
+function renderInteractionResults(data, title = "处方审查结果") {
+  const major = (data.interactions || []).filter((entry) => entry.severity === "major").length;
+  const moderate = (data.interactions || []).filter((entry) => entry.severity === "moderate").length;
+  const duplicateCount = (data.duplicate_classes || []).length;
 
   if (data.safe) {
-    showResults(title, "审核通过", "safe");
-    showRiskBanner("safe", "✓", `已审核 ${data.resolved_count} 种药品，未发现已知显著相互作用或同类重复用药`);
+    showResults(title, "审查通过");
+    showRiskBanner("safe", "✓", `已审查 ${data.resolved_count || 0} 种药物，未发现已知显著冲突或同类重复用药`);
     els.resultsBody.innerHTML = `
       <div class="clinical-summary">
-        <div class="summary-card safe"><span>审核结论</span><strong>通过</strong></div>
-        <div class="summary-card safe"><span>审核药品</span><strong>${data.resolved_count}</strong></div>
+        <div class="summary-card safe"><span>审查结论</span><strong>通过</strong></div>
+        <div class="summary-card safe"><span>药品数量</span><strong>${data.resolved_count || 0}</strong></div>
         <div class="summary-card safe"><span>风险项</span><strong>0</strong></div>
       </div>
-      <div class="success-box">处方药品组合未发现已知冲突，但仍需结合患者肝肾功能、年龄等因素综合判断。</div>
-      <p style="font-size:0.85rem;color:var(--muted)">审核药品：${data.drug_names?.join("、") || "-"}</p>`;
+      <div class="success-box">
+        当前组合未发现知识库中已知的显著冲突，但仍建议结合患者年龄、肝肾功能、既往病史和指南综合判断。
+      </div>
+    `;
     return;
   }
 
-  showResults(title, `${major + moderate + dupCount} 项风险`, "danger");
+  showResults(title, `${major + moderate + duplicateCount} 项风险`);
   showRiskBanner(
     major ? "danger" : "warn",
     major ? "⚠" : "!",
-    `发现 ${major} 项严重、${moderate} 项中等相互作用${dupCount ? `，${dupCount} 项同类重复用药` : ""}，请调整处方`
+    `发现 ${major} 项严重冲突、${moderate} 项中等冲突${duplicateCount ? `，以及 ${duplicateCount} 组同类重复用药` : ""}`
   );
+
+  const interactions = (data.interactions || [])
+    .map(
+      (entry) => `
+        <article class="result-card ${entry.severity === "major" ? "danger-card" : "warn-card"}">
+          <h3>${entry.drug_a || "-"} ↔ ${entry.drug_b || "-"}</h3>
+          <div class="meta"><span class="chip danger">${severityLabel(entry.severity)}</span></div>
+          <p>${entry.description || "暂无描述"}</p>
+          <p class="muted"><strong>建议：</strong>${entry.recommendation || "暂无建议"}</p>
+        </article>
+      `
+    )
+    .join("");
+
+  const duplicates = (data.duplicate_classes || [])
+    .map(
+      (entry) => `
+        <article class="result-card warn-card">
+          <h3>同类重复用药 · ${entry.atc_name || "-"}</h3>
+          <div class="meta">${(entry.drugs || []).map((name) => `<span class="chip danger">${name}</span>`).join("")}</div>
+          <p class="muted">ATC ${entry.atc_code || "-"}，建议核对是否存在同类药物重复使用。</p>
+        </article>
+      `
+    )
+    .join("");
 
   els.resultsBody.innerHTML = `
     <div class="clinical-summary">
       <div class="summary-card ${major ? "danger" : "warn"}"><span>严重</span><strong>${major}</strong></div>
       <div class="summary-card warn"><span>中等</span><strong>${moderate}</strong></div>
-      <div class="summary-card warn"><span>同类重复</span><strong>${dupCount}</strong></div>
+      <div class="summary-card warn"><span>重复</span><strong>${duplicateCount}</strong></div>
     </div>
-    ${(data.interactions || [])
-      .map(
-        (i) => `
-        <article class="result-card ${i.severity === "major" ? "danger-card" : "warn-card"}">
-          <h3>${i.drug_a} ↔ ${i.drug_b}</h3>
-          <div class="meta"><span class="chip danger">${severityLabel(i.severity)}</span></div>
-          <p style="margin:0 0 8px;font-size:0.9rem">${i.description || ""}</p>
-          <p style="margin:0;font-size:0.85rem;color:var(--muted)"><strong>处置建议：</strong>${i.recommendation || "-"}</p>
-        </article>`
-      )
-      .join("")}
-    ${(data.duplicate_classes || [])
-      .map(
-        (d) => `
-        <article class="result-card warn-card">
-          <h3>同类重复用药 — ${d.atc_name}</h3>
-          <div class="meta">${(d.drugs || []).map((n) => `<span class="chip danger">${n}</span>`).join("")}</div>
-          <p style="margin:8px 0 0;font-size:0.85rem;color:var(--muted)">ATC ${d.atc_code}：同一药理类别药物不应重复使用</p>
-        </article>`
-      )
-      .join("")}`;
+    ${interactions}
+    ${duplicates}
+  `;
 }
 
 function renderComorbidityResults(data, title = "合并症方案分析") {
-  const ix = data.interaction_check || {};
-  const major = (ix.interactions || []).filter((i) => i.severity === "major").length;
+  const interactionCheck = data.interaction_check || {};
+  const plans = data.plans || [];
 
-  showResults(title, `${(data.plans || []).length} 个方案`, ix.safe ? "safe" : "danger");
+  showResults(title, `${plans.length} 个方案`);
 
-  if (ix.safe) {
-    showRiskBanner("safe", "✓", "各病方案合并后未发现已知用药冲突");
+  if (interactionCheck.safe) {
+    showRiskBanner("safe", "✓", "各病种方案合并后未发现显著用药冲突");
   } else {
-    showRiskBanner("danger", "⚠", `合并用药存在 ${(ix.interactions || []).length} 项潜在冲突${major ? `（${major} 项严重）` : ""}`);
+    showRiskBanner("danger", "⚠", `合并方案后发现 ${(interactionCheck.interactions || []).length} 项潜在交叉用药风险`);
   }
 
-  const plans = (data.plans || [])
+  const planHtml = plans
     .map(
-      (p) => `
-      <article class="result-card">
-        <h3>${p.disease}</h3>
-        <div class="meta">
-          <span class="chip">${p.plan}</span>
-          <span class="chip">ICD ${p.icd || "-"}</span>
-          <span class="chip ${p.line === "first" ? "line-first" : ""}">${lineLabel(p.line)}</span>
-        </div>
-        <div class="drug-list">${(p.drugs || []).map((d) => `<span class="drug-item">${d}</span>`).join("")}</div>
-      </article>`
+      (plan) => `
+        <article class="result-card">
+          <h3>${plan.disease || "-"} · ${plan.plan || "未命名方案"}</h3>
+          <div class="meta">
+            <span class="chip">ICD ${plan.icd || "-"}</span>
+            <span class="chip ${plan.line === "first" ? "line-first" : ""}">${lineLabel(plan.line)}</span>
+          </div>
+          <div class="drug-list">${(plan.drugs || []).map((drug) => `<span class="drug-item">${drug}</span>`).join("")}</div>
+        </article>
+      `
     )
     .join("");
 
-  let ixHtml = "";
-  if (!ix.safe && ix.interactions?.length) {
-    ixHtml = `<div class="section-title">交叉用药冲突</div>` +
-      ix.interactions.map(
-        (i) => `
-        <article class="result-card danger-card">
-          <h3>${i.drug_a} ↔ ${i.drug_b}</h3>
-          <div class="meta"><span class="chip danger">${severityLabel(i.severity)}</span></div>
-          <p style="font-size:0.88rem;margin:0">${i.description}。${i.recommendation || ""}</p>
-        </article>`
-      ).join("");
-  }
+  const interactionHtml = interactionCheck.safe
+    ? ""
+    : (interactionCheck.interactions || [])
+        .map(
+          (entry) => `
+            <article class="result-card danger-card">
+              <h3>${entry.drug_a || "-"} ↔ ${entry.drug_b || "-"}</h3>
+              <div class="meta"><span class="chip danger">${severityLabel(entry.severity)}</span></div>
+              <p>${entry.description || ""}</p>
+            </article>
+          `
+        )
+        .join("");
 
   els.resultsBody.innerHTML = `
-    <p style="font-size:0.88rem;color:var(--muted);margin:0 0 12px">
-      诊断：${data.diseases?.join("、")} · 涉及药品 ${(data.combined_drugs || []).length} 种
-    </p>
-    <div class="section-title">各病治疗方案</div>
-    ${plans}
-    ${ixHtml}`;
+    <p class="muted">涉及疾病：${(data.diseases || []).join("、") || "-"}；合并药品数量：${(data.combined_drugs || []).length}</p>
+    <div class="section-title">推荐方案</div>
+    ${planHtml || '<div class="empty-state"><p>暂无方案结果</p></div>'}
+    ${interactionHtml ? `<div class="section-title">交叉用药风险</div>${interactionHtml}` : ""}
+  `;
 }
 
 function renderClinicalResults(diseases, drugs, comorbidityData, interactionData, contraindications) {
   updateWorkflowStep(3);
 
-  const ix = interactionData || {};
-  const major = (ix.interactions || []).filter((i) => i.severity === "major").length;
-  const contraMajor = (contraindications || []).filter((c) => c.severity === "major").length;
-  const hasRisk = !ix.safe || contraMajor > 0;
+  const interactions = interactionData || { safe: true, interactions: [], duplicate_classes: [] };
+  const major = (interactions.interactions || []).filter((entry) => entry.severity === "major").length;
+  const majorContraindications = (contraindications || []).filter((entry) => entry.severity === "major").length;
+  const duplicateCount = (interactions.duplicate_classes || []).length;
+  const totalRisk = major + majorContraindications + duplicateCount;
 
-  showResults("临床用药评估报告", hasRisk ? "需关注" : "可继续", hasRisk ? "danger" : "safe");
+  showResults("临床用药评估报告", totalRisk ? "需重点关注" : "建议可继续");
 
-  if (hasRisk) {
-    showRiskBanner("danger", "⚠",
-      `评估发现 ${major} 项严重相互作用、${contraMajor} 项禁忌匹配，建议调整方案后再处方`);
+  if (totalRisk) {
+    showRiskBanner("danger", "⚠", `发现 ${major} 项严重相互作用、${majorContraindications} 项严重禁忌、${duplicateCount} 组重复用药`);
   } else {
-    showRiskBanner("safe", "✓", "当前用药组合未发现已知显著冲突，方案符合指南推荐");
+    showRiskBanner("safe", "✓", "当前组合未发现显著冲突，适合继续结合临床背景评估");
   }
 
   let html = `
     <div class="clinical-summary">
-      <div class="summary-card"><span>诊断</span><strong>${diseases.length}</strong></div>
+      <div class="summary-card"><span>诊断数量</span><strong>${diseases.length}</strong></div>
       <div class="summary-card"><span>当前用药</span><strong>${drugs.length}</strong></div>
-      <div class="summary-card ${hasRisk ? "danger" : "safe"}"><span>风险项</span><strong>${major + contraMajor + (ix.duplicate_classes?.length || 0)}</strong></div>
+      <div class="summary-card ${totalRisk ? "danger" : "safe"}"><span>风险项</span><strong>${totalRisk}</strong></div>
     </div>
-    <p style="font-size:0.85rem;color:var(--muted);margin-bottom:16px">
-      诊断：${diseases.join("、") || "-"} · 用药：${drugs.join("、") || "未录入"}
-    </p>`;
+    <p class="muted">疾病：${diseases.join("、") || "-"}；当前用药：${drugs.join("、") || "-"}</p>
+  `;
 
   if (contraindications?.length) {
-    html += `<div class="section-title">禁忌症警示</div>`;
-    html += contraindications.map(
-      (c) => `
-      <article class="result-card danger-card">
-        <h3>${c.drug} — ${c.condition}</h3>
-        <div class="meta"><span class="chip danger">${severityLabel(c.severity)}</span></div>
-        <p style="font-size:0.88rem;margin:0">${c.description || ""}</p>
-      </article>`
-    ).join("");
+    html += `<div class="section-title">禁忌提示</div>`;
+    html += contraindications
+      .map(
+        (entry) => `
+          <article class="result-card danger-card">
+            <h3>${entry.drug || "-"} · ${entry.condition || "-"}</h3>
+            <div class="meta"><span class="chip danger">${severityLabel(entry.severity)}</span></div>
+            <p>${entry.description || ""}</p>
+          </article>
+        `
+      )
+      .join("");
   }
 
   if (comorbidityData?.plans?.length) {
-    html += `<div class="section-title">指南推荐方案</div>`;
-    html += comorbidityData.plans.map(
-      (p) => `
-      <article class="result-card">
-        <h3>${p.disease} — ${p.plan}</h3>
-        <div class="meta">
-          <span class="chip ${p.line === "first" ? "line-first" : ""}">${lineLabel(p.line)}</span>
-        </div>
-        <div class="drug-list">${(p.drugs || []).map((d) => `<span class="drug-item">${d}</span>`).join("")}</div>
-      </article>`
-    ).join("");
+    html += `<div class="section-title">合并方案建议</div>`;
+    html += comorbidityData.plans
+      .map(
+        (entry) => `
+          <article class="result-card">
+            <h3>${entry.disease || "-"} · ${entry.plan || "-"}</h3>
+            <div class="meta">
+              <span class="chip ${entry.line === "first" ? "line-first" : ""}">${lineLabel(entry.line)}</span>
+            </div>
+            <div class="drug-list">${(entry.drugs || []).map((drug) => `<span class="drug-item">${drug}</span>`).join("")}</div>
+          </article>
+        `
+      )
+      .join("");
   }
 
-  if (!ix.safe) {
-    html += `<div class="section-title">相互作用检测</div>`;
-    html += (ix.interactions || []).map(
-      (i) => `
-      <article class="result-card ${i.severity === "major" ? "danger-card" : "warn-card"}">
-        <h3>${i.drug_a} ↔ ${i.drug_b}</h3>
-        <div class="meta"><span class="chip danger">${severityLabel(i.severity)}</span></div>
-        <p style="font-size:0.88rem;margin:0">${i.description}。<strong>建议：</strong>${i.recommendation || "-"}</p>
-      </article>`
-    ).join("");
-    html += (ix.duplicate_classes || []).map(
-      (d) => `
-      <article class="result-card warn-card">
-        <h3>同类重复 — ${d.atc_name}</h3>
-        <div class="meta">${d.drugs.map((n) => `<span class="chip danger">${n}</span>`).join("")}</div>
-      </article>`
-    ).join("");
-  } else if (drugs.length >= 2) {
-    html += `<div class="success-box">当前 ${drugs.length} 种用药未发现已知相互作用</div>`;
+  if (!interactions.safe) {
+    html += `<div class="section-title">相互作用与重复用药</div>`;
+    html += (interactions.interactions || [])
+      .map(
+        (entry) => `
+          <article class="result-card ${entry.severity === "major" ? "danger-card" : "warn-card"}">
+            <h3>${entry.drug_a || "-"} ↔ ${entry.drug_b || "-"}</h3>
+            <div class="meta"><span class="chip danger">${severityLabel(entry.severity)}</span></div>
+            <p>${entry.description || ""}</p>
+            <p class="muted"><strong>建议：</strong>${entry.recommendation || "-"}</p>
+          </article>
+        `
+      )
+      .join("");
+    html += (interactions.duplicate_classes || [])
+      .map(
+        (entry) => `
+          <article class="result-card warn-card">
+            <h3>同类重复用药 · ${entry.atc_name || "-"}</h3>
+            <div class="meta">${(entry.drugs || []).map((drug) => `<span class="chip danger">${drug}</span>`).join("")}</div>
+          </article>
+        `
+      )
+      .join("");
   }
 
   els.resultsBody.innerHTML = html;
@@ -508,60 +538,93 @@ function renderClinicalResults(diseases, drugs, comorbidityData, interactionData
 
 function renderQAResults(data) {
   const intentMap = {
-    interaction_check: "相互作用咨询",
+    interaction_check: "联用检查",
     recommend: "方案推荐",
     drug_info: "药品查询",
-    contraindication_check: "禁忌咨询",
-    unknown: "通用",
+    contraindication_check: "禁忌检查",
+    unknown: "通用问答",
   };
-  showResults("智能助手回复", intentMap[data.intent] || data.intent, "");
-  showRiskBanner("safe", "💬", "以下回答基于知识图谱检索，仅供参考");
+
+  showResults("规则问答结果", intentMap[data.intent] || data.intent || "问答");
+  showRiskBanner("safe", "✦", "以下回答来自规则问答与知识图谱检索结果，适合作品演示与学习用途");
+
   els.resultsBody.innerHTML = `
     <article class="result-card">
-      <div class="meta"><span class="chip">${intentMap[data.intent] || data.intent}</span></div>
+      <div class="meta">
+        <span class="chip">${intentMap[data.intent] || data.intent || "未知"}</span>
+      </div>
       <div class="qa-answer">${(data.answer || "").replace(/\n/g, "<br>")}</div>
-    </article>`;
+    </article>
+  `;
 }
 
 function renderGraph(data) {
-  if (!data.nodes?.length) {
-    if (network) { network.destroy(); network = null; }
-    els.graphContainer.innerHTML = `<div class="empty-state"><p>暂无关联图谱</p></div>`;
+  if (!data?.nodes?.length) {
+    if (network) {
+      network.destroy();
+      network = null;
+    }
+    els.graphContainer.innerHTML = `<div class="empty-state"><p>当前查询没有可视化图谱结果</p></div>`;
     return;
   }
+
   els.graphContainer.innerHTML = "";
-  const nodes = new vis.DataSet(data.nodes.map((n) => ({ ...n, font: { size: 13 } })));
-  const edges = new vis.DataSet(
-    data.edges.map((e) => ({
-      ...e, arrows: "to", font: { align: "middle", size: 10 }, color: { color: "#94a3b8" },
+
+  const nodes = new vis.DataSet(
+    data.nodes.map((node) => ({
+      ...node,
+      font: {
+        size: 13,
+        face: "Noto Serif SC",
+      },
     }))
   );
+
+  const edges = new vis.DataSet(
+    data.edges.map((edge) => ({
+      ...edge,
+      arrows: "to",
+      font: { align: "middle", size: 10 },
+      color: { color: "#9aa6b2" },
+    }))
+  );
+
   network = new vis.Network(
     els.graphContainer,
     { nodes, edges },
     {
       groups: graphGroups,
-      physics: { stabilization: { iterations: 120 }, barnesHut: { gravitationalConstant: -2500, springLength: 130 } },
       interaction: { hover: true, tooltipDelay: 100 },
+      physics: {
+        stabilization: { iterations: 140 },
+        barnesHut: {
+          gravitationalConstant: -2800,
+          springLength: 130,
+        },
+      },
     }
   );
 }
 
-// ===== Search Actions =====
-
 async function withLoading(fn) {
   showLoading(true);
-  try { await fn(); } finally { showLoading(false); }
+  try {
+    await fn();
+  } finally {
+    showLoading(false);
+  }
 }
 
 async function searchRecommend(disease, icd) {
   const params = new URLSearchParams();
   if (disease) params.set("disease", disease);
   if (icd) params.set("icd", icd);
+
   const [recommend, graph] = await Promise.all([
-    fetchJSON(`${API}/recommend?${params}`),
-    fetchJSON(`${API}/graph?${params}`),
+    fetchJSON(`${API}/recommend?${params.toString()}`),
+    fetchJSON(`${API}/graph?${params.toString()}`),
   ]);
+
   renderRecommendResults(recommend);
   renderGraph(graph);
 }
@@ -569,17 +632,19 @@ async function searchRecommend(disease, icd) {
 async function searchDrug(drugName) {
   const params = new URLSearchParams({ drug_name: drugName });
   const [drug, graph] = await Promise.all([
-    fetchJSON(`${API}/drug?${params}`),
-    fetchJSON(`${API}/graph?${params}`),
+    fetchJSON(`${API}/drug?${params.toString()}`),
+    fetchJSON(`${API}/graph?${params.toString()}`),
   ]);
+
   renderDrugResults(drug);
   renderGraph(graph);
 }
 
 async function searchInteraction(drugs, title) {
   const params = new URLSearchParams({ drugs: drugs.join(",") });
-  const data = await fetchJSON(`${API}/interactions?${params}`);
+  const data = await fetchJSON(`${API}/interactions?${params.toString()}`);
   renderInteractionResults(data, title);
+
   if (drugs.length) {
     const graph = await fetchJSON(`${API}/graph?drug_name=${encodeURIComponent(drugs[0])}`);
     renderGraph(graph);
@@ -592,7 +657,9 @@ async function searchComorbidity(diseases, title) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ diseases }),
   });
+
   renderComorbidityResults(data, title);
+
   if (diseases.length) {
     const graph = await fetchJSON(`${API}/graph?disease=${encodeURIComponent(diseases[0])}`);
     renderGraph(graph);
@@ -611,41 +678,35 @@ async function searchQA(question) {
 async function runClinicalAssessment(diseases, drugs, condition) {
   updateWorkflowStep(2);
 
-  const tasks = [];
-
-  if (diseases.length) {
-    tasks.push(
-      fetchJSON(`${API}/comorbidity`, {
+  const comorbidityTask = diseases.length
+    ? fetchJSON(`${API}/comorbidity`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ diseases }),
       })
-    );
-  } else {
-    tasks.push(Promise.resolve(null));
-  }
+    : Promise.resolve(null);
 
-  if (drugs.length >= 2) {
-    tasks.push(fetchJSON(`${API}/interactions?drugs=${encodeURIComponent(drugs.join(","))}`));
-  } else {
-    tasks.push(Promise.resolve({ safe: true, interactions: [], duplicate_classes: [] }));
-  }
+  const interactionTask = drugs.length >= 2
+    ? fetchJSON(`${API}/interactions?drugs=${encodeURIComponent(drugs.join(","))}`)
+    : Promise.resolve({ safe: true, interactions: [], duplicate_classes: [] });
 
-  if (drugs.length && condition) {
-    tasks.push(
-      Promise.all(
-        drugs.map((d) =>
-          fetchJSON(`${API}/contraindications?drug_name=${encodeURIComponent(d)}&condition=${encodeURIComponent(condition)}`)
-            .then((r) => r.results)
+  const contraindicationTask = drugs.length && condition
+    ? Promise.all(
+        drugs.map((drug) =>
+          fetchJSON(
+            `${API}/contraindications?drug_name=${encodeURIComponent(drug)}&condition=${encodeURIComponent(condition)}`
+          )
+            .then((result) => result.results)
             .catch(() => [])
         )
-      ).then((arr) => arr.flat())
-    );
-  } else {
-    tasks.push(Promise.resolve([]));
-  }
+      ).then((results) => results.flat())
+    : Promise.resolve([]);
 
-  const [comorbidityData, interactionData, contraindications] = await Promise.all(tasks);
+  const [comorbidityData, interactionData, contraindications] = await Promise.all([
+    comorbidityTask,
+    interactionTask,
+    contraindicationTask,
+  ]);
 
   renderClinicalResults(diseases, drugs, comorbidityData, interactionData, contraindications);
 
@@ -653,57 +714,73 @@ async function runClinicalAssessment(diseases, drugs, condition) {
     ? `disease=${encodeURIComponent(diseases[0])}`
     : drugs[0]
       ? `drug_name=${encodeURIComponent(drugs[0])}`
-      : null;
+      : "";
+
   if (graphQuery) {
     const graph = await fetchJSON(`${API}/graph?${graphQuery}`);
     renderGraph(graph);
   }
 }
 
-// ===== Navigation =====
-
 function switchView(viewId) {
-  document.querySelectorAll(".nav-item").forEach((n) => {
-    n.classList.toggle("active", n.dataset.view === viewId);
+  document.querySelectorAll(".nav-item").forEach((item) => {
+    item.classList.toggle("active", item.dataset.view === viewId);
   });
-  document.querySelectorAll(".view").forEach((v) => {
-    v.classList.toggle("active", v.id === `view-${viewId}`);
+
+  document.querySelectorAll(".view").forEach((view) => {
+    view.classList.toggle("active", view.id === `view-${viewId}`);
   });
-  if (viewId === "clinical") updateWorkflowStep(1);
-}
 
-function runScenario(key) {
-  const s = SCENARIOS[key];
-  if (!s) return;
-  switchView(s.view);
-
-  if (s.view === "clinical") {
-    els.clinicalDiseases.value = s.diseases || "";
-    els.clinicalCondition.value = s.condition || "";
-    chipStores.clinical = [...(s.drugs || [])];
-    renderChips("clinical", els.clinicalDrugChips);
-    withLoading(() => runClinicalAssessment(
-      s.diseases.split(/[,，]/).map((d) => d.trim()).filter(Boolean),
-      s.drugs || [],
-      s.condition || ""
-    )).catch((err) => renderError(err.message));
-  } else if (s.view === "prescription") {
-    chipStores.prescription = [...s.drugs];
-    renderChips("prescription", els.prescriptionChips);
-    withLoading(() => searchInteraction(s.drugs, "处方审核报告")).catch((err) => renderError(err.message));
-  } else if (s.view === "recommend") {
-    els.diseaseInput.value = s.disease;
-    withLoading(() => searchRecommend(s.disease, "")).catch((err) => renderError(err.message));
-  } else if (s.view === "drug") {
-    els.drugInput.value = s.drug;
-    withLoading(() => searchDrug(s.drug)).catch((err) => renderError(err.message));
-  } else if (s.view === "qa") {
-    els.qaInput.value = s.question;
-    withLoading(() => searchQA(s.question)).catch((err) => renderError(err.message));
+  if (viewId === "clinical") {
+    updateWorkflowStep(1);
   }
 }
 
-// ===== Init =====
+function runScenario(key) {
+  const scenario = SCENARIOS[key];
+  if (!scenario) return;
+
+  switchView(scenario.view);
+  document.getElementById("workbench").scrollIntoView({ behavior: "smooth", block: "start" });
+
+  if (scenario.view === "clinical") {
+    els.clinicalDiseases.value = scenario.diseases || "";
+    els.clinicalCondition.value = scenario.condition || "";
+    chipStores.clinical = [...(scenario.drugs || [])];
+    renderChips("clinical", els.clinicalDrugChips);
+    withLoading(() =>
+      runClinicalAssessment(
+        (scenario.diseases || "")
+          .split(/[，,]/)
+          .map((item) => item.trim())
+          .filter(Boolean),
+        scenario.drugs || [],
+        scenario.condition || ""
+      )
+    ).catch((error) => renderError(error.message));
+  }
+
+  if (scenario.view === "prescription") {
+    chipStores.prescription = [...(scenario.drugs || [])];
+    renderChips("prescription", els.prescriptionChips);
+    withLoading(() => searchInteraction(scenario.drugs || [], "处方审查结果")).catch((error) => renderError(error.message));
+  }
+
+  if (scenario.view === "recommend") {
+    els.diseaseInput.value = scenario.disease || "";
+    withLoading(() => searchRecommend(scenario.disease || "", "")).catch((error) => renderError(error.message));
+  }
+
+  if (scenario.view === "drug") {
+    els.drugInput.value = scenario.drug || "";
+    withLoading(() => searchDrug(scenario.drug || "")).catch((error) => renderError(error.message));
+  }
+
+  if (scenario.view === "qa") {
+    els.qaInput.value = scenario.question || "";
+    withLoading(() => searchQA(scenario.question || "")).catch((error) => renderError(error.message));
+  }
+}
 
 async function loadStats() {
   const stats = await fetchJSON(`${API}/stats`);
@@ -713,7 +790,7 @@ async function loadStats() {
   els.statInteractions.textContent = stats.interactions ?? "-";
   els.statContraindications.textContent = stats.contraindications ?? "-";
   els.statAdverse.textContent = stats.adverse_effects ?? "-";
-  if (els.statTreats) els.statTreats.textContent = stats.treats ?? "-";
+  els.statTreats.textContent = stats.treats ?? "-";
 }
 
 async function loadOptions() {
@@ -721,35 +798,52 @@ async function loadOptions() {
     fetchJSON(`${API}/diseases`),
     fetchJSON(`${API}/drugs`),
   ]);
-  diseaseOptions = diseases.results;
-  drugOptions = drugs.results;
 
-  const diseaseOpts = diseaseOptions.map((d) => `<option value="${d.name}">${d.icd || ""}</option>`).join("");
-  document.querySelectorAll("datalist[id^='diseaseList']").forEach((el) => { el.innerHTML = diseaseOpts; });
+  diseaseOptions = diseases.results || [];
+  drugOptions = drugs.results || [];
 
-  const drugOpts = drugOptions.map((d) => `<option value="${d.name}">${d.brand || ""}</option>`).join("");
-  document.querySelectorAll("datalist[id^='drugList']").forEach((el) => { el.innerHTML = drugOpts; });
+  const diseaseOptionsHtml = diseaseOptions
+    .map((entry) => `<option value="${entry.name}">${entry.icd || ""}</option>`)
+    .join("");
 
-  els.diseaseTags.innerHTML = diseaseOptions.slice(0, 5)
-    .map((d) => `<button type="button" class="tag" data-disease="${d.name}">${d.name}</button>`).join("");
+  document.querySelectorAll("datalist[id^='diseaseList']").forEach((element) => {
+    element.innerHTML = diseaseOptionsHtml;
+  });
 
-  els.drugTags.innerHTML = drugOptions.slice(0, 5)
-    .map((d) => `<button type="button" class="tag" data-drug="${d.name}">${d.name}</button>`).join("");
+  const drugOptionsHtml = drugOptions
+    .map((entry) => `<option value="${entry.name}">${entry.brand || ""}</option>`)
+    .join("");
+
+  document.querySelectorAll("datalist[id^='drugList']").forEach((element) => {
+    element.innerHTML = drugOptionsHtml;
+  });
+
+  els.diseaseTags.innerHTML = diseaseOptions
+    .slice(0, 6)
+    .map((entry) => `<button type="button" class="tag" data-disease="${entry.name}">${entry.name}</button>`)
+    .join("");
+
+  els.drugTags.innerHTML = drugOptions
+    .slice(0, 6)
+    .map((entry) => `<button type="button" class="tag" data-drug="${entry.name}">${entry.name}</button>`)
+    .join("");
 
   els.prescriptionTags.innerHTML = `
-    <button type="button" class="tag" data-rx="缬沙坦,厄贝沙坦">ARB 重复</button>
+    <button type="button" class="tag" data-rx="缬沙坦,厄贝沙坦">同类重复用药</button>
     <button type="button" class="tag" data-rx="阿司匹林,氯吡格雷">双抗联用</button>
-    <button type="button" class="tag" data-rx="氨氯地平,辛伐他汀">CYP3A4</button>`;
+    <button type="button" class="tag" data-rx="氨氯地平,辛伐他汀">典型相互作用</button>
+  `;
 
   els.qaTags.innerHTML = `
-    <button type="button" class="tag" data-qa="阿司匹林和氯吡格雷能一起吃吗？">联用咨询</button>
+    <button type="button" class="tag" data-qa="阿司匹林和氯吡格雷能一起吃吗？">联用检查</button>
     <button type="button" class="tag" data-qa="高血压推荐什么方案？">方案推荐</button>
-    <button type="button" class="tag" data-qa="二甲双胍的适应症">药品适应症</button>`;
+    <button type="button" class="tag" data-qa="二甲双胍的适应症是什么？">药品问答</button>
+  `;
 }
 
 function bindEvents() {
-  document.querySelectorAll(".nav-item").forEach((btn) => {
-    btn.addEventListener("click", () => switchView(btn.dataset.view));
+  document.querySelectorAll(".nav-item").forEach((button) => {
+    button.addEventListener("click", () => switchView(button.dataset.view));
   });
 
   document.querySelectorAll(".scenario-card").forEach((card) => {
@@ -757,97 +851,134 @@ function bindEvents() {
   });
 
   const addClinical = setupChipInput(els.clinicalDrugInput, "clinical", els.clinicalDrugChips);
-  const addRx = setupChipInput(els.prescriptionInput, "prescription", els.prescriptionChips);
+  const addPrescription = setupChipInput(els.prescriptionInput, "prescription", els.prescriptionChips);
 
   document.getElementById("addClinicalDrug").addEventListener("click", addClinical);
-  document.getElementById("addPrescriptionDrug").addEventListener("click", addRx);
+  document.getElementById("addPrescriptionDrug").addEventListener("click", addPrescription);
 
-  document.getElementById("clinicalDemo").addEventListener("click", () => {
-    els.clinicalDiseases.value = "高血压, 2型糖尿病";
-    els.clinicalCondition.value = "";
-    chipStores.clinical = ["二甲双胍", "氨氯地平", "阿司匹林"];
-    renderChips("clinical", els.clinicalDrugChips);
+  document.getElementById("clinicalDemo").addEventListener("click", () => runScenario("clinical-htn-dm"));
+
+  els.jumpWorkbench.addEventListener("click", () => {
+    document.getElementById("workbench").scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
-  document.getElementById("clinicalForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const diseases = els.clinicalDiseases.value.split(/[,，]/).map((s) => s.trim()).filter(Boolean);
+  els.runIntroScenario.addEventListener("click", () => runScenario("clinical-htn-dm"));
+
+  document.getElementById("clinicalForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const diseases = els.clinicalDiseases.value
+      .split(/[，,]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
     const drugs = [...chipStores.clinical];
     const condition = els.clinicalCondition.value;
-    if (!diseases.length && !drugs.length) return renderError("请至少录入诊断或当前用药");
-    await withLoading(() => runClinicalAssessment(diseases, drugs, condition)).catch((err) => renderError(err.message));
+
+    if (!diseases.length && !drugs.length) {
+      renderError("请至少输入诊断疾病或当前用药");
+      return;
+    }
+
+    await withLoading(() => runClinicalAssessment(diseases, drugs, condition)).catch((error) => renderError(error.message));
   });
 
-  document.getElementById("recommendForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
+  document.getElementById("recommendForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
     const disease = els.diseaseInput.value.trim();
     const icd = els.icdInput.value.trim();
-    if (!disease && !icd) return renderError("请输入疾病名称或 ICD 编码");
-    await withLoading(() => searchRecommend(disease, icd)).catch((err) => renderError(err.message));
+    if (!disease && !icd) {
+      renderError("请输入疾病名称或 ICD 编码");
+      return;
+    }
+
+    await withLoading(() => searchRecommend(disease, icd)).catch((error) => renderError(error.message));
   });
 
-  document.getElementById("prescriptionForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
+  document.getElementById("prescriptionForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
     const drugs = [...chipStores.prescription];
-    if (drugs.length < 2) return renderError("处方审核至少需要 2 种药品");
-    await withLoading(() => searchInteraction(drugs, "处方审核报告")).catch((err) => renderError(err.message));
+    if (drugs.length < 2) {
+      renderError("处方审查至少需要 2 种药物");
+      return;
+    }
+
+    await withLoading(() => searchInteraction(drugs, "处方审查结果")).catch((error) => renderError(error.message));
   });
 
-  document.getElementById("drugForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
+  document.getElementById("drugForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
     const name = els.drugInput.value.trim();
-    if (!name) return renderError("请输入药品名称");
-    await withLoading(() => searchDrug(name)).catch((err) => renderError(err.message));
+    if (!name) {
+      renderError("请输入药品名称");
+      return;
+    }
+
+    await withLoading(() => searchDrug(name)).catch((error) => renderError(error.message));
   });
 
-  document.getElementById("comorbidityForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const diseases = els.comorbidityInput.value.split(/[,，]/).map((s) => s.trim()).filter(Boolean);
-    if (!diseases.length) return renderError("请输入至少一种疾病");
-    await withLoading(() => searchComorbidity(diseases)).catch((err) => renderError(err.message));
+  document.getElementById("comorbidityForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const diseases = els.comorbidityInput.value
+      .split(/[，,]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (!diseases.length) {
+      renderError("请至少输入一种疾病");
+      return;
+    }
+
+    await withLoading(() => searchComorbidity(diseases)).catch((error) => renderError(error.message));
   });
 
-  document.getElementById("qaForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const q = els.qaInput.value.trim();
-    if (!q) return renderError("请输入问题");
-    await withLoading(() => searchQA(q)).catch((err) => renderError(err.message));
+  document.getElementById("qaForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const question = els.qaInput.value.trim();
+    if (!question) {
+      renderError("请输入临床问题");
+      return;
+    }
+
+    await withLoading(() => searchQA(question)).catch((error) => renderError(error.message));
   });
 
-  els.diseaseTags.addEventListener("click", async (e) => {
-    const btn = e.target.closest("[data-disease]");
-    if (!btn) return;
-    els.diseaseInput.value = btn.dataset.disease;
-    await withLoading(() => searchRecommend(btn.dataset.disease, "")).catch((err) => renderError(err.message));
+  els.diseaseTags.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-disease]");
+    if (!button) return;
+    els.diseaseInput.value = button.dataset.disease;
+    await withLoading(() => searchRecommend(button.dataset.disease, "")).catch((error) => renderError(error.message));
   });
 
-  els.drugTags.addEventListener("click", async (e) => {
-    const btn = e.target.closest("[data-drug]");
-    if (!btn) return;
-    els.drugInput.value = btn.dataset.drug;
-    await withLoading(() => searchDrug(btn.dataset.drug)).catch((err) => renderError(err.message));
+  els.drugTags.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-drug]");
+    if (!button) return;
+    els.drugInput.value = button.dataset.drug;
+    await withLoading(() => searchDrug(button.dataset.drug)).catch((error) => renderError(error.message));
   });
 
-  els.prescriptionTags.addEventListener("click", async (e) => {
-    const btn = e.target.closest("[data-rx]");
-    if (!btn) return;
-    chipStores.prescription = btn.dataset.rx.split(",");
+  els.prescriptionTags.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-rx]");
+    if (!button) return;
+    chipStores.prescription = button.dataset.rx.split(",").map((item) => item.trim()).filter(Boolean);
     renderChips("prescription", els.prescriptionChips);
-    await withLoading(() => searchInteraction(chipStores.prescription, "处方审核报告")).catch((err) => renderError(err.message));
+    await withLoading(() => searchInteraction(chipStores.prescription, "处方审查结果")).catch((error) => renderError(error.message));
   });
 
-  els.qaTags.addEventListener("click", async (e) => {
-    const btn = e.target.closest("[data-qa]");
-    if (!btn) return;
-    els.qaInput.value = btn.dataset.qa;
-    await withLoading(() => searchQA(btn.dataset.qa)).catch((err) => renderError(err.message));
+  els.qaTags.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-qa]");
+    if (!button) return;
+    els.qaInput.value = button.dataset.qa;
+    await withLoading(() => searchQA(button.dataset.qa)).catch((error) => renderError(error.message));
   });
 
   document.getElementById("printResults").addEventListener("click", () => window.print());
+
   document.getElementById("clearResults").addEventListener("click", () => {
     els.resultsSection.hidden = true;
     hideRiskBanner();
-    if (network) { network.destroy(); network = null; }
+    if (network) {
+      network.destroy();
+      network = null;
+    }
     els.graphContainer.innerHTML = "";
   });
 }
@@ -855,13 +986,13 @@ function bindEvents() {
 async function bootstrap() {
   showLoading(false);
   bindEvents();
+
   try {
-    const health = await fetchJSON(`${API}/health`);
-    setStatus(true, "Neo4j 已连接");
+    await fetchJSON(`${API}/health`);
+    setStatus(true, "Neo4j / API 已连接");
     await Promise.all([loadStats(), loadOptions()]);
-  } catch (err) {
-    setStatus(false, "数据库未连接");
-    switchView("dashboard");
+  } catch (error) {
+    setStatus(false, "演示页已加载，但后端当前未连接");
   } finally {
     showLoading(false);
   }
