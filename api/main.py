@@ -16,6 +16,8 @@ from pydantic import BaseModel, Field
 from api import cypher as cq
 from api.graph_builder import build_disease_graph, build_drug_graph
 from api.qa import answer_question
+from api.rag import build_grounded_response
+from api.safety import assess_question
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
@@ -54,7 +56,7 @@ class ComorbidityRequest(BaseModel):
 
 
 class QARequest(BaseModel):
-    question: str = Field(..., min_length=2)
+    question: str = Field(..., min_length=2, max_length=1000)
 
 
 def resolve_drug_ids(session, names: list[str]) -> list[str]:
@@ -257,6 +259,14 @@ def find_path(drug_a: str = Query(...), drug_b: str = Query(...)) -> dict:
 
 @app.post("/qa")
 def qa(body: QARequest) -> dict:
+    safety = assess_question(body.question)
+    if safety.action == "blocked":
+        return {
+            "question": body.question.strip(), "intent": "safety_blocked", "answer": safety.message,
+            "data": {}, "citations": [],
+            "retrieval": {"strategy": "none", "grounded": False, "context_records": 0},
+            "safety": safety.as_dict(),
+        }
     with driver.session() as session:
         def resolve_drugs(name: str) -> list[dict[str, Any]]:
             return session.run(cq.RESOLVE_DRUG, name=name).data()
@@ -285,6 +295,9 @@ def qa(body: QARequest) -> dict:
             ).data()
             return {"contraindications": results}
 
-        return answer_question(
+        result = answer_question(
             body.question, resolve_drugs, check_ix, recommend, drug_info, check_ci
         )
+        result = build_grounded_response(result)
+        result["safety"] = safety.as_dict()
+        return result

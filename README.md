@@ -157,6 +157,16 @@ powershell -ExecutionPolicy Bypass -File scripts/start_web.ps1
 - 增加用户角色、病例输入和多轮分析流程。
 - 增加 Docker 化部署与 CI 自动测试。
 
+## Graph-RAG、引用与安全护栏
+
+问答接口 `POST /qa` 采用轻量的 Graph-RAG 流程：规则识别问题类型后，以 Cypher 从 Neo4j 检索结构化事实，并基于检索结果组织回答。响应除 `answer` 外还包含：
+
+- `retrieval`：检索策略、证据是否可追溯和上下文记录数；
+- `citations`：指南来源或本地数据集定位信息，用于追溯回答依据；
+- `safety`：安全决策、风险级别、触发原因和固定免责声明。
+
+涉及胸痛、呼吸困难、药物过量等紧急风险信号的问题会被直接拦截，不提供在线处置建议；涉及剂量、停换药、处方、妊娠/哺乳、儿童或肝肾功能不全的问题会标记为“需要专业复核”。具体策略与引用边界见 [Graph-RAG 文档](docs/GRAPH_RAG.md)。
+
 ## License
 
 仅供学习与作品展示使用。

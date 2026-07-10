@@ -20,6 +20,16 @@ def test_api_root():
     assert "/qa" in data["endpoints"]
 
 
+@patch("api.main.driver")
+def test_qa_blocks_emergency_without_querying_graph(mock_driver):
+    resp = client.post("/qa", json={"question": "服药后胸痛怎么办"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["intent"] == "safety_blocked"
+    assert data["safety"]["action"] == "blocked"
+    mock_driver.session.assert_not_called()
+
+
 def test_qa_unknown_intent():
     result = answer_question(
         "今天天气怎么样",

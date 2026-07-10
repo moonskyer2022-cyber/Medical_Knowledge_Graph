@@ -546,7 +546,13 @@ function renderQAResults(data) {
   };
 
   showResults("规则问答结果", intentMap[data.intent] || data.intent || "问答");
-  showRiskBanner("safe", "✦", "以下回答来自规则问答与知识图谱检索结果，适合作品演示与学习用途");
+  const safety = data.safety || {};
+  const needsReview = safety.action === "blocked" || safety.action === "review_required";
+  showRiskBanner(needsReview ? "danger" : "safe", needsReview ? "!" : "✦", safety.message || "以下回答来自规则问答与知识图谱检索结果，适合作品演示与学习用途");
+
+  const citations = (data.citations || [])
+    .map((citation) => `<li><strong>[${citation.id}] ${citation.title}</strong><br><span class="muted">${citation.claim || "图谱检索结果"} · ${citation.locator}</span></li>`)
+    .join("");
 
   els.resultsBody.innerHTML = `
     <article class="result-card">
@@ -554,6 +560,8 @@ function renderQAResults(data) {
         <span class="chip">${intentMap[data.intent] || data.intent || "未知"}</span>
       </div>
       <div class="qa-answer">${(data.answer || "").replace(/\n/g, "<br>")}</div>
+      ${citations ? `<section class="qa-citations"><h3>证据与来源</h3><ol>${citations}</ol></section>` : ""}
+      ${safety.disclaimer ? `<p class="muted qa-disclaimer">${safety.disclaimer}</p>` : ""}
     </article>
   `;
 }

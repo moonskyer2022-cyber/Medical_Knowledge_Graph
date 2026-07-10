@@ -1025,6 +1025,12 @@ select {
   line-height: 1.85;
 }
 
+.qa-citations { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.qa-citations h3 { margin: 0 0 8px; font-size: 0.95rem; }
+.qa-citations ol { margin: 0; padding-left: 20px; }
+.qa-citations li + li { margin-top: 8px; }
+.qa-disclaimer { margin: 14px 0 0; font-size: 0.82rem; }
+
 .legend {
   padding: 0 22px 16px;
   gap: 12px;
