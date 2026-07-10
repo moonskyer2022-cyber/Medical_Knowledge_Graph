@@ -1,171 +1,222 @@
-# 医药知识图谱
+# 医药知识图谱（Medical Knowledge Graph）
 
-一个面向临床决策辅助场景的本地知识图谱项目，基于 `Neo4j + FastAPI + HTML/CSS/JavaScript` 构建，覆盖疾病推荐、药品详情、药物相互作用检测、禁忌查询、合并症分析、规则问答和图谱可视化等核心能力。
+基于 **Neo4j + FastAPI + Cypher** 的本地医药知识图谱与临床辅助决策原型。项目将药品、疾病、治疗方案、禁忌症、不良反应、药物相互作用和 ATC 分类等结构化数据构建为图谱，并通过 REST API 与网页界面提供检索、风险检查和可追溯问答能力。
 
-这个仓库适合想了解知识图谱工程落地方式的开发者、学习者和研究者。它展示了一个从原始 CSV 数据出发，逐步完成清洗、建模、导入、查询封装和前端展示的完整项目闭环。
+> 医疗安全声明：本项目仅用于学习、演示和技术研究；数据与回答不能替代医生、药师、正式临床指南或急救服务。
 
-> **免责声明**
-> 本项目数据与结论仅用于学习、演示与技术研究，不能替代执业医师、药师或正式临床指南。
+## 目录
 
-## 项目亮点
+- [核心能力](#核心能力)
+- [系统架构](#系统架构)
+- [技术栈](#技术栈)
+- [快速开始](#快速开始)
+- [API 概览](#api-概览)
+- [Graph-RAG、引用与安全策略](#graph-rag引用与安全策略)
+- [数据模型与数据流](#数据模型与数据流)
+- [项目结构](#项目结构)
+- [测试与评估](#测试与评估)
+- [已知边界](#已知边界)
 
-- 使用 Neo4j 建模医药领域中的 `疾病 / 药品 / 方案 / 禁忌 / 不良反应 / ATC 分类` 等实体与关系。
-- 提供面向业务的 API，而不是只把底层图数据库直接暴露出来。
-- 支持多药联用风险分析，能够识别已知相互作用和同类重复用药。
-- 支持合并症方案聚合与冲突检查，贴近真实临床辅助决策场景。
-- 提供原生前端展示页，便于直观展示查询结果和图谱关系。
-- 配套数据清洗脚本、导入脚本、测试与评估脚本，便于说明工程化思路。
+## 核心能力
 
-## 项目简介
-
-这是一个基于 Neo4j 的医药知识图谱项目。我先将药品、疾病、治疗方案、禁忌和不良反应等 CSV 数据清洗后导入图数据库，再通过 FastAPI 暴露推荐、药品详情、相互作用检查、合并症分析和问答接口，最后用前端页面完成可视化展示。项目重点不只是图数据库本身，而是围绕真实业务查询场景，搭建了一个完整的数据产品原型。
-
-项目的几个关键点包括：
-
-- 我做了领域建模，把原始表格数据重组为图结构。
-- 我把 Cypher 查询封装成了业务 API，而不是只停留在数据库层。
-- 我补齐了前端展示、测试和评估脚本，让项目更接近可演示、可说明的作品。
-
-## 功能概览
-
-| 模块 | 能力说明 |
-|------|------|
-| 疾病推荐 | 根据疾病名或 ICD 返回治疗方案、药物、证据等级、适用人群等信息 |
-| 药品详情 | 查询适应症、不良反应、禁忌、ATC 分类、别名 |
-| 相互作用检测 | 分析多药联用风险，识别严重程度和建议 |
-| 合并症分析 | 合并多个疾病的治疗方案，并检查交叉用药冲突 |
-| 图谱可视化 | 展示疾病、方案、药品、不良反应等节点关系 |
-| 规则问答 | 通过自然语言完成联用、推荐、适应症、禁忌类问题解析 |
-| 回归评估 | 通过 `scripts/eval.py` 对推荐、相互作用、问答结果做简单校验 |
-
-## 项目结构
-
-```text
-AI_Knowledeg/
-├─ api/                  # FastAPI 服务、Cypher 封装、问答与图谱组装
-├─ cypher/               # Neo4j schema 与查询语句
-├─ data/
-│  ├─ raw/               # 原始 CSV
-│  └─ clean/             # 清洗后的 CSV
-├─ docs/                 # 知识图谱说明与补充文档
-├─ scripts/              # 数据清洗、图数据库导入、启动、评估脚本
-├─ tests/                # API 与评估相关测试
-├─ web/                  # 展示页前端资源
-├─ requirements.txt
-└─ README.md
-```
+| 模块 | 说明 |
+| --- | --- |
+| 疾病方案推荐 | 按疾病名称或 ICD 查询治疗方案、药品、证据等级、适用人群和剂量信息。 |
+| 药品知识查询 | 返回药品别名、适应症、ATC 分类、不良反应和禁忌信息。 |
+| 处方风险检查 | 检测多药联用中的已知相互作用及同类重复用药。 |
+| 合并症分析 | 聚合多种疾病对应的治疗方案，并对组合用药执行冲突检查。 |
+| 图谱可视化 | 展示疾病、方案、药品及相关知识节点之间的关系。 |
+| 图谱问答 | 支持联用检查、禁忌、方案推荐和药品适应症等规则化自然语言问答。 |
+| 证据溯源 | 问答结果返回图谱检索元数据和指南来源或本地数据集定位信息。 |
+| 安全护栏 | 对紧急风险请求进行拦截；对剂量、停换药等个体化决策要求专业复核。 |
 
 ## 系统架构
 
-```text
-raw CSV data
-   ->
-scripts/clean.py
-   ->
-data/clean/*.csv
-   ->
-scripts/import_neo4j.py
-   ->
-Neo4j graph database
-   ->
-api/*.py (FastAPI + Cypher)
-   ->
-web/index.html + web/js/app.js
+```mermaid
+flowchart LR
+    A[原始 CSV 数据] --> B[数据清洗 scripts/clean.py]
+    B --> C[清洗 CSV 数据]
+    C --> D[Neo4j 导入 scripts/import_neo4j.py]
+    D --> E[(Neo4j 图数据库)]
+    E --> F[FastAPI + Cypher]
+    F --> G[REST API / OpenAPI]
+    F --> H[Graph-RAG 问答]
+    H --> I[引用溯源与安全护栏]
+    G --> J[Web 前端]
 ```
+
+运行时，业务接口通过参数化 Cypher 查询 Neo4j；问答接口先完成安全判定和意图识别，再检索图谱事实、组织回答并附上引用与免责声明。
 
 ## 技术栈
 
-- 图数据库：`Neo4j 5`
-- 后端：`FastAPI`
-- 查询语言：`Cypher`
-- 数据处理：`pandas`
-- 前端：原生 `HTML / CSS / JavaScript`
-- 测试与评估：`pytest`、自定义 `eval.py`
+- 图数据库：Neo4j 5
+- 后端：FastAPI、Pydantic、Uvicorn
+- 图查询：Cypher
+- 数据处理：pandas
+- 前端：原生 HTML、CSS、JavaScript（vis-network）
+- 测试：pytest、FastAPI TestClient
+- 配置：python-dotenv、Docker Compose（可选 Neo4j 本地环境）
 
 ## 快速开始
 
-### 1. 安装依赖
+### 1. 前置条件
 
-推荐使用虚拟环境：
+- Python 3.10+
+- Neo4j 5，或 Docker Desktop
+
+### 2. 启动 Neo4j
+
+使用 Docker Compose：
 
 ```powershell
-py -m venv .venv
+docker compose up -d
+```
+
+默认 Bolt 地址为 `bolt://127.0.0.1:7687`，默认账号为 `neo4j`，密码为 `password`。也可以使用已有 Neo4j 实例。
+
+### 3. 创建 Python 环境并安装依赖
+
+```powershell
+python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-### 2. 配置 Neo4j
+### 4. 配置连接信息
 
-在项目根目录创建 `.env`：
+复制 `.env.example` 为 `.env`，再按实际 Neo4j 配置修改：
 
 ```env
-NEO4J_URI=bolt://localhost:7687
+NEO4J_URI=bolt://127.0.0.1:7687
 NEO4J_USER=neo4j
-NEO4J_PASSWORD=your_password
+NEO4J_PASSWORD=password
 ```
 
-### 3. 清洗数据
+### 5. 清洗并导入数据
 
 ```powershell
 python scripts/clean.py
+python scripts/import_neo4j.py --full
 ```
 
-### 4. 导入图数据库
+`--full` 会清空当前 Neo4j 图数据后重新导入；仅需增量导入时请省略该参数。
 
-```powershell
-python scripts/import_neo4j.py
-```
-
-### 5. 启动项目
+### 6. 启动服务
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/start_web.ps1
 ```
 
-启动后访问：
+访问地址：
 
-- 前端演示页：`http://127.0.0.1:8000`
-- Swagger API 文档：`http://127.0.0.1:8000/docs`
+- Web 界面：<http://127.0.0.1:8000>
+- OpenAPI / Swagger：<http://127.0.0.1:8000/docs>
+- 健康检查：<http://127.0.0.1:8000/health>
+
+## API 概览
+
+| 接口 | 方法 | 说明 |
+| --- | --- | --- |
+| `/health` | GET | 验证 API 与 Neo4j 连通性。 |
+| `/stats` | GET | 返回图谱节点与关系统计。 |
+| `/recommend` | GET | 按 `disease` 或 `icd` 查询治疗方案。 |
+| `/drug` | GET | 按 `drug_name` 查询药品详情。 |
+| `/interactions` | GET | 以逗号分隔的药品名执行联用检查。 |
+| `/interactions/check` | POST | 以 JSON 药品列表执行联用检查。 |
+| `/contraindications` | GET | 查询药品与指定情况的禁忌记录。 |
+| `/comorbidity` | POST | 聚合多疾病方案并检查药物冲突。 |
+| `/graph` | GET | 返回疾病或药品关联子图。 |
+| `/path` | GET | 查询两种药品之间的图路径。 |
+| `/qa` | POST | 返回带引用与安全决策的图谱问答结果。 |
+
+问答示例：
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/qa `
+  -ContentType 'application/json' `
+  -Body '{"question":"阿司匹林和氯吡格雷能一起用吗？"}'
+```
+
+## Graph-RAG、引用与安全策略
+
+`POST /qa` 使用轻量的 Graph-RAG 实现：规则识别问题类型后，使用 Cypher 检索 Neo4j 的结构化事实，再基于检索结果组织回答。它不依赖外部模型服务，因此可在离线本地环境运行。
+
+回答统一包含以下字段：
+
+- `answer`：基于检索事实组织的文本回答；
+- `data`：原始结构化检索结果；
+- `retrieval`：检索策略、是否有可追溯证据和上下文记录数；
+- `citations`：来源标题、图谱字段或 CSV 定位信息、受支撑事实与来源类型；
+- `safety`：安全动作、风险等级、触发词、提示和免责声明。
+
+安全策略采用保守处理：
+
+- 出现胸痛、呼吸困难、昏迷、严重过敏、药物过量等紧急风险信号时，系统返回 `blocked`，不访问图谱也不提供在线处置建议；
+- 出现剂量、加减量、停换药、处方、妊娠/哺乳、儿童或肝肾功能不全等内容时，系统返回 `review_required`，所有检索结果均需医生或药师复核；
+- 方案推荐和药物适应症优先使用图谱中的指南来源字段；相互作用和禁忌的当前演示数据会明确定位到本地 CSV，而非声称外部临床证据验证。
+
+详细契约和引用边界见 [docs/GRAPH_RAG.md](docs/GRAPH_RAG.md)。
+
+## 数据模型与数据流
+
+### 核心实体
+
+`Disease`、`Drug`、`Plan`、`Alias`、`Condition`、`AdverseEffect` 与 `AtcClass`。
+
+### 主要关系
+
+`TREATS`、`TARGETS`、`INCLUDES`、`INTERACTS_WITH`、`CONTRAINDICATED_FOR`、`CAUSES`、`HAS_DOSAGE_FOR`、`HAS_ALIAS`、`BELONGS_TO_ATC` 与 `SUBCLASS_OF`。
+
+### 数据处理原则
+
+- `data/raw/` 保存输入数据；`data/clean/` 保存可导入的清洗结果；
+- 清洗脚本去重、规范文本、校验关键外键并剔除无效关系；
+- 图导入脚本使用 `MERGE` 保证节点与关系幂等；
+- 图谱模式与查询定义分别位于 `cypher/schema.cypher` 和 `api/cypher.py`。
+
+## 项目结构
+
+```text
+Medical_Knowledge_Graph/
+├── api/                   # FastAPI、Cypher 调用、图谱组装、Graph-RAG 与安全策略
+├── cypher/                # Neo4j schema 与查询定义
+├── data/
+│   ├── raw/               # 原始 CSV
+│   └── clean/             # 清洗后的 CSV
+├── docs/                  # 本体、Graph-RAG 与补充技术文档
+├── scripts/               # 清洗、导入、启动和评估脚本
+├── tests/                 # API、RAG 与安全策略测试
+├── web/                   # 原生前端资源
+├── docker-compose.yml     # Neo4j 本地容器配置
+├── requirements.txt
+└── README.md
+```
+
+## 测试与评估
+
+运行测试：
+
+```powershell
+python -m pytest -q
+```
+
+运行演示级评估：
+
+```powershell
+python scripts/eval.py
+```
+
+## 已知边界
+
+- 数据规模和覆盖范围为演示级，不是生产级医学知识库；
+- 问答以规则识别与图谱检索为主，尚未实现多轮会话、向量检索或外部 LLM 生成；
+- 真实医疗使用还需要权威数据授权、知识版本治理、审计、权限控制、隐私合规和临床验证；
+- 不应基于本项目的回答直接进行诊断、处方或紧急处置。
 
 ## 相关文档
 
-如果你想继续了解这个项目的背景说明和补充资料，可以查看这些文档：
-
 - [知识图谱本体说明](docs/ONTOLOGY.md)
-- [FSE AI STAR 总结](docs/FSE-AI-STAR法总结.md)
-- [FSE AI 技术流程与难点（小白版）](<docs/FSE-AI-技术流程与难点(小白版).md>)
-
-## 项目价值
-
-这个项目最有价值的部分，不只是“知识图谱”这个名词，而是它展示了一条比较完整的工程路径：
-
-1. 如何把原始表格数据抽象成节点和关系。
-2. 如何把图查询能力封装成业务 API。
-3. 如何为一个数据项目补齐前端展示、测试和说明文档。
-4. 如何把一个演示级脚本升级成可演示、可维护的小型系统。
-
-## 当前边界
-
-- 当前数据规模偏演示级，不是生产级医学知识库。
-- 问答能力以规则和结构化查询为主，不是完整大模型医学问答系统。
-- 结果更适合做课程作业、原型验证和知识图谱学习，不适合直接用于真实医疗决策。
-
-## 后续可扩展方向
-
-- 接入更多疾病、药品、指南和证据等级数据。
-- 增加 LLM 辅助问答，但保留结构化校验链路。
-- 增加用户角色、病例输入和多轮分析流程。
-- 增加 Docker 化部署与 CI 自动测试。
-
-## Graph-RAG、引用与安全护栏
-
-问答接口 `POST /qa` 采用轻量的 Graph-RAG 流程：规则识别问题类型后，以 Cypher 从 Neo4j 检索结构化事实，并基于检索结果组织回答。响应除 `answer` 外还包含：
-
-- `retrieval`：检索策略、证据是否可追溯和上下文记录数；
-- `citations`：指南来源或本地数据集定位信息，用于追溯回答依据；
-- `safety`：安全决策、风险级别、触发原因和固定免责声明。
-
-涉及胸痛、呼吸困难、药物过量等紧急风险信号的问题会被直接拦截，不提供在线处置建议；涉及剂量、停换药、处方、妊娠/哺乳、儿童或肝肾功能不全的问题会标记为“需要专业复核”。具体策略与引用边界见 [Graph-RAG 文档](docs/GRAPH_RAG.md)。
+- [Graph-RAG、引用与安全护栏](docs/GRAPH_RAG.md)
 
 ## License
 
