@@ -1212,3 +1212,14 @@ select {
     height: 420px;
   }
 }
+/* Source governance and audit console */
+.governance-grid { display: grid; grid-template-columns: 1.45fr 1fr; gap: 1rem; margin-top: 1rem; }
+.governance-panel { padding: 1rem; }
+.audit-panel { margin-top: 1rem; }
+.table-wrap { overflow-x: auto; margin-top: .75rem; }
+.governance-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.governance-table th, .governance-table td { border-bottom: 1px solid rgba(31, 61, 88, .14); padding: .65rem .5rem; text-align: left; vertical-align: top; }
+.governance-table th { color: #65748b; font-weight: 600; white-space: nowrap; }
+.governance-table td small { display: block; color: #65748b; margin-top: .2rem; }
+.governance-feedback { margin-top: .75rem; padding: .7rem; border-radius: .6rem; background: #e8f6ed; color: #21643b; }
+@media (max-width: 900px) { .governance-grid { grid-template-columns: 1fr; } }

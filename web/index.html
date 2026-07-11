@@ -202,6 +202,8 @@
           <button class="nav-item" data-view="qa">规则问答</button>
         </div>
 
+          <button class="nav-item" data-view="governance">来源治理</button>
+
         <section class="view active" id="view-dashboard">
           <div class="dashboard-intro">
             <article class="intro-card">
@@ -394,6 +396,16 @@
           <div class="quick-tags" id="qaTags"></div>
         </section>
       </section>
+
+        <section class="view" id="view-governance">
+          <div class="view-head"><h3>来源审核与审计管理</h3><p>查看来源核验状态、提交审核结论，并在启用认证后查看脱敏审计事件。</p></div>
+          <div class="governance-grid">
+            <article class="panel governance-panel"><div class="panel-headline"><h3>来源目录</h3><button type="button" class="btn btn-secondary btn-inline" id="refreshSources">刷新</button></div><div id="sourceGovernanceStatus" class="muted">正在加载来源目录...</div><div class="table-wrap"><table class="governance-table"><thead><tr><th>来源</th><th>元数据</th><th>临床内容</th><th>下次复核</th><th>操作</th></tr></thead><tbody id="sourcesTableBody"></tbody></table></div></article>
+            <article class="panel governance-panel"><div class="panel-headline"><h3>提交审核</h3></div><form class="panel-form" id="sourceReviewForm"><label class="field"><span>来源</span><select id="reviewSourceId" required><option value="">请选择来源</option></select></label><label class="field"><span>审核类型</span><select id="reviewType"><option value="metadata">元数据</option><option value="clinical_content">临床内容</option></select></label><label class="field"><span>结论</span><select id="reviewOutcome"><option value="approved">通过</option><option value="rejected">驳回</option><option value="needs_revision">需修订</option></select></label><label class="field"><span>证据链接</span><input id="reviewEvidenceUrl" type="url" placeholder="https://..."></label><label class="field"><span>备注</span><textarea id="reviewNotes" rows="3" placeholder="记录审核依据与限制"></textarea></label><label class="field"><span>下次复核日期</span><input id="reviewNextDue" type="date"></label><button type="submit" class="btn btn-primary">提交审核</button></form><div id="reviewFeedback" class="governance-feedback" hidden></div></article>
+          </div>
+          <article class="panel governance-panel audit-panel"><div class="panel-headline"><h3>最近审计事件</h3><button type="button" class="btn btn-secondary btn-inline" id="refreshAudit">刷新</button></div><div id="auditStatus" class="muted">启用认证并使用管理员令牌后可查看。</div><div class="table-wrap"><table class="governance-table"><thead><tr><th>时间</th><th>用户</th><th>动作</th><th>方法</th><th>状态</th><th>耗时</th></tr></thead><tbody id="auditTableBody"></tbody></table></div></article>
+          <label class="field" style="margin-top:1rem"><span>管理员令牌（可选）</span><input id="adminToken" type="password" placeholder="粘贴 /auth/token 返回的 access_token"></label>
+        </section>
 
       <section class="results-section" id="resultsSection" hidden>
         <div class="results-toolbar">

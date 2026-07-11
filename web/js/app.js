@@ -3,6 +3,7 @@ const API = "";
 let network = null;
 let diseaseOptions = [];
 let drugOptions = [];
+let sourceRegistry = [];
 
 const chipStores = {
   clinical: [],
@@ -172,6 +173,37 @@ function renderError(message) {
   hideRiskBanner();
   showResults("查询失败", "错误");
   els.resultsBody.innerHTML = `<div class="error-box">${message}</div>`;
+}
+
+function governanceError(error) { return error?.message || "请求失败，请检查认证状态和 API 服务。"; }
+
+function renderSources(sources) {
+  sourceRegistry = sources || [];
+  const select = document.getElementById("reviewSourceId");
+  document.getElementById("sourcesTableBody").innerHTML = sourceRegistry.map((source) => `<tr><td><strong>${source.title || source.source_id}</strong><small>${source.source_id}</small></td><td>${source.metadata_status || "-"}</td><td>${source.content_review_status || "-"}</td><td>${source.next_review_due || "-"}</td><td><button type="button" class="tag" data-review-source="${source.source_id}">审核</button></td></tr>`).join("");
+  select.innerHTML = '<option value="">请选择来源</option>' + sourceRegistry.map((source) => `<option value="${source.source_id}">${source.title || source.source_id}</option>`).join("");
+  document.getElementById("sourceGovernanceStatus").textContent = `共 ${sourceRegistry.length} 条来源；审核结果会写入来源目录与历史记录。`;
+}
+
+async function loadGovernanceSources() { renderSources((await fetchJSON(`${API}/sources`)).sources || []); }
+
+function authHeaders() {
+  const token = document.getElementById("adminToken")?.value.trim();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function loadAuditEvents() {
+  const status = document.getElementById("auditStatus");
+  try {
+    const data = await fetchJSON(`${API}/audit/recent?limit=50`, { headers: authHeaders() });
+    document.getElementById("auditTableBody").innerHTML = (data.events || []).map((event) => `<tr><td>${event.timestamp || "-"}</td><td>${event.user || "anonymous"}</td><td>${event.action || "-"}</td><td>${event.method || "-"}</td><td>${event.status_code ?? "-"}</td><td>${event.duration_ms ?? "-"} ms</td></tr>`).join("") || '<tr><td colspan="6" class="muted">暂无审计事件</td></tr>';
+    status.textContent = `已加载 ${data.count || 0} 条脱敏审计事件。`;
+  } catch (error) { status.textContent = governanceError(error); }
+}
+
+async function loadGovernance() {
+  try { await loadGovernanceSources(); } catch (error) { document.getElementById("sourceGovernanceStatus").textContent = governanceError(error); }
+  await loadAuditEvents();
 }
 
 function updateWorkflowStep(step) {
@@ -851,7 +883,24 @@ async function loadOptions() {
 
 function bindEvents() {
   document.querySelectorAll(".nav-item").forEach((button) => {
-    button.addEventListener("click", () => switchView(button.dataset.view));
+    button.addEventListener("click", () => { switchView(button.dataset.view); if (button.dataset.view === "governance") loadGovernance(); });
+  });
+
+  document.getElementById("refreshSources").addEventListener("click", () => loadGovernanceSources().catch((error) => { document.getElementById("sourceGovernanceStatus").textContent = governanceError(error); }));
+  document.getElementById("refreshAudit").addEventListener("click", loadAuditEvents);
+  const tokenInput = document.getElementById("adminToken");
+  tokenInput.value = sessionStorage.getItem("pharmakg_admin_token") || "";
+  tokenInput.addEventListener("change", () => sessionStorage.setItem("pharmakg_admin_token", tokenInput.value.trim()));
+  document.getElementById("sourcesTableBody").addEventListener("click", (event) => { const button = event.target.closest("[data-review-source]"); if (button) document.getElementById("reviewSourceId").value = button.dataset.reviewSource; });
+  document.getElementById("sourceReviewForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const sourceId = document.getElementById("reviewSourceId").value;
+    const feedback = document.getElementById("reviewFeedback");
+    if (!sourceId) return;
+    try {
+      const result = await fetchJSON(`${API}/sources/${encodeURIComponent(sourceId)}/reviews`, { method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ review_type: document.getElementById("reviewType").value, outcome: document.getElementById("reviewOutcome").value, evidence_url: document.getElementById("reviewEvidenceUrl").value, notes: document.getElementById("reviewNotes").value, next_review_due: document.getElementById("reviewNextDue").value }) });
+      feedback.hidden = false; feedback.textContent = `审核已提交：${result.review_id}`; await loadGovernanceSources(); await loadAuditEvents();
+    } catch (error) { feedback.hidden = false; feedback.textContent = governanceError(error); }
   });
 
   document.querySelectorAll(".scenario-card").forEach((card) => {

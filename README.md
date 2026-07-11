@@ -258,6 +258,15 @@ python scripts/eval.py
 
 - [知识图谱本体说明](docs/ONTOLOGY.md)
 - [Graph-RAG、引用与安全护栏](docs/GRAPH_RAG.md)
+- [完整业务案例](docs/CASE_STUDY.md)
+- [3 分钟演示脚本](docs/DEMO_SCRIPT.md)
+- [产品与工程演进路线](docs/ROADMAP.md)
+
+本地质量门禁：`powershell -ExecutionPolicy Bypass -File scripts/quality_check.ps1`（未安装 Docker 时追加 `-SkipDocker`）。
+
+### 来源治理与审计界面
+
+启动 API 后进入首页工作台的“来源治理”页，可查看来源目录、元数据/临床内容审核状态，并提交审核结论。启用 `AUTH_ENABLED=true` 后，使用 `/auth/token` 获取管理员令牌，将令牌粘贴到页面的管理员令牌输入框，即可提交审核并查看脱敏审计事件。审核结果会同步写入来源登记表和审核历史 CSV；审计记录默认只保留白名单字段，不记录密码、令牌或临床请求正文。
 
 ## License
 
