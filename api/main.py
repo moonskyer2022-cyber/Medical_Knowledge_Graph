@@ -3,6 +3,7 @@
 import os
 import time
 import uuid
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,7 @@ from api.qa import answer_question
 from api.rag import build_grounded_response
 from api.safety import assess_question, safety_response
 from api.source_registry import get_source_by_id, list_source_reviews, load_source_registry, record_source_review
+from api.observability import allow_request, log_request, rate_limit_enabled
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
@@ -36,6 +38,7 @@ if APP_ENV == "production" and not PASSWORD:
     raise RuntimeError("NEO4J_PASSWORD must be configured when APP_ENV=production")
 PASSWORD = PASSWORD or "password"
 driver = GraphDatabase.driver(URI, auth=(USER, PASSWORD))
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 
 
 def configured_origins() -> list[str]:
@@ -97,6 +100,12 @@ async def authentication_and_audit(request: Request, call_next):
     user = AuthUser("anonymous", ())
     path = request.url.path
     protected = path not in PUBLIC_PATHS and not path.startswith("/static")
+    if rate_limit_enabled() and path in {"/auth/token", "/qa"}:
+        key = f"{request.client.host if request.client else 'unknown'}:{path}"
+        if not allow_request(key):
+            response = JSONResponse(status_code=429, content={"detail": "rate limit exceeded"})
+            response.headers["X-Request-ID"] = request_id
+            return response
     if authentication_enabled() and protected:
         try:
             user = user_from_authorization(request.headers.get("Authorization"))
@@ -108,6 +117,8 @@ async def authentication_and_audit(request: Request, call_next):
     request.state.user = user
     response = await call_next(request)
     response.headers["X-Request-ID"] = request_id
+    response.headers["X-Process-Time-ms"] = str(round((time.perf_counter() - started) * 1000, 2))
+    log_request(request_id=request_id, method=request.method, path=path, status_code=response.status_code, user=user.username, duration_ms=round((time.perf_counter() - started) * 1000, 2))
     if protected:
         append_audit_event({"request_id": request_id, "user": user.username, "roles": list(user.roles), "action": path, "method": request.method, "status_code": response.status_code, "duration_ms": round((time.perf_counter() - started) * 1000, 2)})
     return response

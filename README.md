@@ -185,6 +185,8 @@ python scripts/review_sources.py --source-id SRC-001 --review-type metadata `
 
 审核记录支持证据链接与证据摘录，接口支持审核历史分页；审计日志默认限制为 10 MB，超过后自动轮转为 `.1` 文件。可通过 `AUDIT_MAX_BYTES` 调整阈值，并通过 `/audit/recent?limit=50&offset=0` 分页读取脱敏事件。
 
+企业级运行参数还包括：`RATE_LIMIT_ENABLED`、`RATE_LIMIT_REQUESTS`、`RATE_LIMIT_WINDOW_SECONDS`、`LOG_JSON`。可用 `python scripts/data_quality.py` 生成原始 CSV 数据质量报告；该命令只读数据，不会覆盖清洗结果。
+
 ## 数据模型与数据流
 
 ### 核心实体

@@ -3,6 +3,7 @@ import shutil
 from api import main
 from api.auth import AuthUser, issue_token, user_from_authorization
 from api.audit import append_audit_event
+from api.observability import allow_request
 from api import source_registry
 from starlette.testclient import TestClient
 
@@ -75,6 +76,20 @@ def test_invalid_token_is_rejected(monkeypatch):
     response = TestClient(main.app).get("/audit/recent", headers={"Authorization": "Bearer invalid"})
     assert response.status_code == 401
     monkeypatch.setenv("AUTH_ENABLED", "false")
+
+
+def test_rate_limit_rejects_after_limit(monkeypatch):
+    monkeypatch.setenv("RATE_LIMIT_ENABLED", "true")
+    assert allow_request("test-rate", limit=1, window_seconds=60)
+    assert not allow_request("test-rate", limit=1, window_seconds=60)
+    monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")
+
+
+def test_response_contains_observability_headers(monkeypatch):
+    monkeypatch.setenv("AUTH_ENABLED", "false")
+    response = TestClient(main.app).get("/api")
+    assert response.headers["X-Request-ID"]
+    assert response.headers["X-Process-Time-ms"]
 
 
 def test_admin_can_record_metadata_review(tmp_path, monkeypatch):
