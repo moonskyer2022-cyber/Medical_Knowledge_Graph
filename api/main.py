@@ -30,8 +30,17 @@ load_dotenv(ROOT / ".env")
 
 URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 USER = os.getenv("NEO4J_USER", "neo4j")
-PASSWORD = os.getenv("NEO4J_PASSWORD", "password")
+APP_ENV = os.getenv("APP_ENV", "demo").strip().lower()
+PASSWORD = os.getenv("NEO4J_PASSWORD", "")
+if APP_ENV == "production" and not PASSWORD:
+    raise RuntimeError("NEO4J_PASSWORD must be configured when APP_ENV=production")
+PASSWORD = PASSWORD or "password"
 driver = GraphDatabase.driver(URI, auth=(USER, PASSWORD))
+
+
+def configured_origins() -> list[str]:
+    raw = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000")
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
 @asynccontextmanager
@@ -46,7 +55,7 @@ app = FastAPI(
     description="医药知识图谱 — 推荐、相互作用、禁忌、智能问答",
     lifespan=lifespan,
 )
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=configured_origins(), allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Authorization", "Content-Type"])
 
 if WEB.exists():
     app.mount("/static", StaticFiles(directory=str(WEB)), name="static")
@@ -73,6 +82,7 @@ class SourceReviewRequest(BaseModel):
     review_type: str = Field(..., pattern="^(metadata|clinical_content)$")
     outcome: str = Field(..., pattern="^(approved|needs_revision|rejected)$")
     evidence_url: str = Field("", max_length=2000)
+    evidence_excerpt: str = Field("", max_length=2000)
     notes: str = Field("", max_length=4000)
     next_review_due: str = Field("", max_length=20)
 
@@ -155,12 +165,12 @@ def create_token(body: TokenRequest) -> dict:
 
 
 @app.get("/audit/recent")
-def audit_recent(request: Request, limit: int = Query(50, ge=1, le=200)) -> dict:
+def audit_recent(request: Request, limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0, le=10000)) -> dict:
     user: AuthUser = request.state.user
     if not authentication_enabled() or "admin" not in user.roles:
         raise HTTPException(status_code=403, detail="administrator role required")
-    events = recent_audit_events(limit)
-    return {"count": len(events), "events": events}
+    events = recent_audit_events(limit, offset)
+    return {"count": len(events), "offset": offset, "events": events}
 
 
 @app.get("/sources")
@@ -173,7 +183,7 @@ def sources() -> dict:
 def source_reviews(source_id: str) -> dict:
     if not get_source_by_id(source_id):
         raise HTTPException(status_code=404, detail=f"Source not found: {source_id}")
-    reviews = list_source_reviews(source_id)
+    reviews = list_source_reviews(source_id, limit=100)
     return {"source_id": source_id, "count": len(reviews), "reviews": reviews}
 
 
@@ -187,7 +197,7 @@ def review_source(source_id: str, body: SourceReviewRequest, request: Request) -
     if body.review_type == "metadata" and not ({"admin", "data_steward"} & set(user.roles)):
         raise HTTPException(status_code=403, detail="data steward role required")
     try:
-        review_id, source = record_source_review(source_id, body.review_type, user.username, "clinical_reviewer" if body.review_type == "clinical_content" else "data_steward", body.outcome, body.evidence_url, body.notes, body.next_review_due)
+        review_id, source = record_source_review(source_id, body.review_type, user.username, "clinical_reviewer" if body.review_type == "clinical_content" else "data_steward", body.outcome, body.evidence_url, body.evidence_excerpt, body.notes, body.next_review_due)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"review_id": review_id, "source": source}

@@ -1,1 +1,1 @@
-review_id,source_id,review_type,reviewer_id,reviewer_role,outcome,evidence_url,reviewed_at,next_review_due,notes
+review_id,source_id,review_type,reviewer_id,reviewer_role,outcome,evidence_url,evidence_excerpt,reviewed_at,next_review_due,notes

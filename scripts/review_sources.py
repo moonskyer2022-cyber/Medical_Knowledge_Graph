@@ -19,8 +19,8 @@ REGISTRY_PATH = ROOT / "data" / "source_registry.csv"
 REVIEWS_PATH = ROOT / "data" / "source_reviews.csv"
 
 
-def record_review(source_id: str, review_type: str, reviewer_id: str, reviewer_role: str, outcome: str, evidence_url: str, notes: str, next_review_due: str = "") -> str:
-    review_id, _ = record_source_review(source_id, review_type, reviewer_id, reviewer_role, outcome, evidence_url, notes, next_review_due)
+def record_review(source_id: str, review_type: str, reviewer_id: str, reviewer_role: str, outcome: str, evidence_url: str, evidence_excerpt: str, notes: str, next_review_due: str = "") -> str:
+    review_id, _ = record_source_review(source_id, review_type, reviewer_id, reviewer_role, outcome, evidence_url, evidence_excerpt, notes, next_review_due)
     return review_id
     with REGISTRY_PATH.open(encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
@@ -57,6 +57,7 @@ def main() -> None:
     parser.add_argument("--reviewer-role", required=True, choices=("data_steward", "clinical_reviewer"))
     parser.add_argument("--outcome", required=True, choices=("approved", "needs_revision", "rejected"))
     parser.add_argument("--evidence-url", default="")
+    parser.add_argument("--evidence-excerpt", default="")
     parser.add_argument("--notes", default="")
     parser.add_argument("--next-review-due", default="")
     args = parser.parse_args()

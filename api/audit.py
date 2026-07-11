@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -33,12 +34,18 @@ def append_audit_event(event: dict[str, Any]) -> None:
     target = audit_log_path()
     target.parent.mkdir(parents=True, exist_ok=True)
     with _LOCK, target.open("a", encoding="utf-8") as handle:
+        max_bytes = int(os.getenv("AUDIT_MAX_BYTES", "10485760"))
+        if target.exists() and target.stat().st_size >= max_bytes:
+            backup = target.with_suffix(target.suffix + ".1")
+            shutil.copyfile(target, backup)
+            target.write_text("", encoding="utf-8")
         handle.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n")
 
 
-def recent_audit_events(limit: int = 50) -> list[dict[str, Any]]:
+def recent_audit_events(limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
     target = audit_log_path()
     if not target.exists():
         return []
-    lines = target.read_text(encoding="utf-8").splitlines()[-limit:]
-    return [json.loads(line) for line in reversed(lines) if line.strip()]
+    lines = [line for line in target.read_text(encoding="utf-8").splitlines() if line.strip()]
+    selected = lines[max(0, len(lines) - offset - limit):len(lines) - offset if offset else None]
+    return [json.loads(line) for line in reversed(selected)]

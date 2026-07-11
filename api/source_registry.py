@@ -45,17 +45,17 @@ def clear_source_registry_cache() -> None:
     load_source_registry.cache_clear()
 
 
-def list_source_reviews(source_id: str | None = None) -> list[dict[str, str]]:
+def list_source_reviews(source_id: str | None = None, limit: int = 100, offset: int = 0) -> list[dict[str, str]]:
     if not REVIEWS_PATH.exists():
         return []
     with REVIEWS_PATH.open(encoding="utf-8-sig", newline="") as handle:
         rows = [{key: (value or "").strip() for key, value in row.items()} for row in csv.DictReader(handle)]
     if source_id:
         rows = [row for row in rows if row.get("source_id") == source_id]
-    return list(reversed(rows))
+    return list(reversed(rows))[offset:offset + limit]
 
 
-def record_source_review(source_id: str, review_type: str, reviewer_id: str, reviewer_role: str, outcome: str, evidence_url: str, notes: str, next_review_due: str = "") -> tuple[str, dict[str, str]]:
+def record_source_review(source_id: str, review_type: str, reviewer_id: str, reviewer_role: str, outcome: str, evidence_url: str, evidence_excerpt: str, notes: str, next_review_due: str = "") -> tuple[str, dict[str, str]]:
     """Persist a review decision and update the source registry for the demo workflow."""
     if review_type not in {"metadata", "clinical_content"}:
         raise ValueError("unsupported review type")
@@ -85,14 +85,14 @@ def record_source_review(source_id: str, review_type: str, reviewer_id: str, rev
             writer = csv.DictWriter(handle, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows)
-        review_fields = ["review_id", "source_id", "review_type", "reviewer_id", "reviewer_role", "outcome", "evidence_url", "reviewed_at", "next_review_due", "notes"]
+        review_fields = ["review_id", "source_id", "review_type", "reviewer_id", "reviewer_role", "outcome", "evidence_url", "evidence_excerpt", "reviewed_at", "next_review_due", "notes"]
         REVIEWS_PATH.parent.mkdir(parents=True, exist_ok=True)
         exists = REVIEWS_PATH.exists() and REVIEWS_PATH.stat().st_size > 0
         with REVIEWS_PATH.open("a", encoding="utf-8", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=review_fields)
             if not exists:
                 writer.writeheader()
-            writer.writerow({"review_id": review_id, "source_id": source_id, "review_type": review_type, "reviewer_id": reviewer_id, "reviewer_role": reviewer_role, "outcome": outcome, "evidence_url": evidence_url, "reviewed_at": now, "next_review_due": next_review_due, "notes": notes})
+            writer.writerow({"review_id": review_id, "source_id": source_id, "review_type": review_type, "reviewer_id": reviewer_id, "reviewer_role": reviewer_role, "outcome": outcome, "evidence_url": evidence_url, "evidence_excerpt": evidence_excerpt, "reviewed_at": now, "next_review_due": next_review_due, "notes": notes})
         clear_source_registry_cache()
     return review_id, target
 

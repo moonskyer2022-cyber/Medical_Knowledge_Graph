@@ -84,6 +84,8 @@ docker compose up -d
 
 默认 Bolt 地址为 `bolt://127.0.0.1:7687`，默认账号为 `neo4j`，密码为 `password`。也可以使用已有 Neo4j 实例。
 
+Docker Compose 启动时必须在 `.env` 中设置 `NEO4J_PASSWORD`；`password` 仅用于本地脚本默认值，禁止用于生产环境。生产部署请设置 `APP_ENV=production`、`CORS_ALLOWED_ORIGINS` 白名单，并使用 Secret 管理数据库密码。
+
 ### 4. 创建 Python 环境并安装依赖
 
 ```powershell
@@ -180,6 +182,8 @@ python scripts/review_sources.py --source-id SRC-001 --review-type metadata `
 ```
 
 临床内容审核必须使用 `clinical_reviewer` 角色；元数据审核必须使用 `data_steward` 角色。审核记录写入 `data/source_reviews.csv`，最新状态同步回 `data/source_registry.csv`。
+
+审核记录支持证据链接与证据摘录，接口支持审核历史分页；审计日志默认限制为 10 MB，超过后自动轮转为 `.1` 文件。可通过 `AUDIT_MAX_BYTES` 调整阈值，并通过 `/audit/recent?limit=50&offset=0` 分页读取脱敏事件。
 
 ## 数据模型与数据流
 

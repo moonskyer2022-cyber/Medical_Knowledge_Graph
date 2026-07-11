@@ -27,6 +27,8 @@ jobs:
 
   container-build:
     runs-on: ubuntu-latest
+    env:
+      NEO4J_PASSWORD: password
     steps:
       - uses: actions/checkout@v4
       - name: Validate Compose definition

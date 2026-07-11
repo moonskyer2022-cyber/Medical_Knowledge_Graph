@@ -39,10 +39,42 @@ def test_audit_filters_clinical_content_when_enabled(tmp_path, monkeypatch):
     assert '"action":"/qa"' in content
 
 
+def test_audit_log_rotates_at_configured_size(tmp_path, monkeypatch):
+    path = tmp_path / "events.jsonl"
+    monkeypatch.setenv("AUDIT_ENABLED", "true")
+    monkeypatch.setenv("AUDIT_LOG_PATH", str(path))
+    monkeypatch.setenv("AUDIT_MAX_BYTES", "1")
+    append_audit_event({"action": "/first"})
+    append_audit_event({"action": "/second"})
+    assert path.with_suffix(".jsonl.1").exists()
+    assert '"action":"/second"' in path.read_text(encoding="utf-8")
+
+
 def test_source_review_endpoint_requires_admin(monkeypatch):
     monkeypatch.setenv("AUTH_ENABLED", "false")
     response = TestClient(main.app).post("/sources/SRC-001/reviews", json={"review_type": "metadata", "outcome": "approved", "evidence_url": "https://example.com"})
     assert response.status_code == 403
+
+
+def test_source_review_enforces_role_scope(monkeypatch):
+    monkeypatch.setenv("AUTH_ENABLED", "true")
+    monkeypatch.setenv("AUTH_SECRET", "x" * 40)
+    token = issue_token(AuthUser("steward", ("data_steward",)))
+    response = TestClient(main.app).post(
+        "/sources/SRC-004/reviews",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"review_type": "clinical_content", "outcome": "rejected"},
+    )
+    assert response.status_code == 403
+    monkeypatch.setenv("AUTH_ENABLED", "false")
+
+
+def test_invalid_token_is_rejected(monkeypatch):
+    monkeypatch.setenv("AUTH_ENABLED", "true")
+    monkeypatch.setenv("AUTH_SECRET", "x" * 40)
+    response = TestClient(main.app).get("/audit/recent", headers={"Authorization": "Bearer invalid"})
+    assert response.status_code == 401
+    monkeypatch.setenv("AUTH_ENABLED", "false")
 
 
 def test_admin_can_record_metadata_review(tmp_path, monkeypatch):
@@ -58,7 +90,7 @@ def test_admin_can_record_metadata_review(tmp_path, monkeypatch):
     response = TestClient(main.app).post(
         "/sources/SRC-004/reviews",
         headers={"Authorization": f"Bearer {token}"},
-        json={"review_type": "metadata", "outcome": "approved", "evidence_url": "https://example.com/source", "notes": "metadata checked"},
+        json={"review_type": "metadata", "outcome": "approved", "evidence_url": "https://example.com/source", "evidence_excerpt": "公开发布记录", "notes": "metadata checked"},
     )
     assert response.status_code == 200
     assert response.json()["source"]["verification_status"] == "metadata_verified"
