@@ -24,4 +24,4 @@ def test_recommendation_has_guideline_citation():
     assert citation["id"] == "S1"
     assert citation["title"] == "中国高血压防治指南"
     assert citation["source_id"] == "SRC-001"
-    assert citation["verification_status"] == "unverified_demo"
+    assert citation["verification_status"] == "metadata_verified"

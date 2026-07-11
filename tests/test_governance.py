@@ -23,7 +23,7 @@ def test_source_registry_resolves_known_guideline_and_rejects_unknown_title():
     source = get_source("中国高血压防治指南")
     assert len(registry) >= 7
     assert source and source["source_id"] == "SRC-001"
-    assert source["verification_status"] == "unverified_demo"
+    assert source["verification_status"] == "metadata_verified"
     assert validate_source_titles({"中国高血压防治指南", "未登记来源"}) == ["未登记来源"]
 
 

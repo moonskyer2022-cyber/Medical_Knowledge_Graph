@@ -64,7 +64,17 @@ flowchart LR
 - Python 3.10+
 - Neo4j 5，或 Docker Desktop
 
-### 2. 启动 Neo4j
+### 2. 一键启动 Demo（推荐）
+
+启动 Docker Desktop 后执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/demo.ps1
+```
+
+该脚本会启动 Neo4j、执行清洗和全量导入、启动 API，并在完成健康检查后输出访问地址。
+
+### 3. 手动启动 Neo4j
 
 使用 Docker Compose：
 
@@ -74,7 +84,7 @@ docker compose up -d
 
 默认 Bolt 地址为 `bolt://127.0.0.1:7687`，默认账号为 `neo4j`，密码为 `password`。也可以使用已有 Neo4j 实例。
 
-### 3. 创建 Python 环境并安装依赖
+### 4. 创建 Python 环境并安装依赖
 
 ```powershell
 python -m venv .venv
@@ -82,7 +92,7 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-### 4. 配置连接信息
+### 5. 配置连接信息
 
 复制 `.env.example` 为 `.env`，再按实际 Neo4j 配置修改：
 
@@ -92,7 +102,7 @@ NEO4J_USER=neo4j
 NEO4J_PASSWORD=password
 ```
 
-### 5. 清洗并导入数据
+### 6. 清洗并导入数据
 
 ```powershell
 python scripts/clean.py
@@ -101,7 +111,7 @@ python scripts/import_neo4j.py --full
 
 `--full` 会清空当前 Neo4j 图数据后重新导入；仅需增量导入时请省略该参数。
 
-### 6. 启动服务
+### 7. 启动服务
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/start_web.ps1
@@ -175,6 +185,8 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/qa `
 - 图导入脚本使用 `MERGE` 保证节点与关系幂等；
 - 图谱模式与查询定义分别位于 `cypher/schema.cypher` 和 `api/cypher.py`。
 
+来源状态区分“元数据已核验”和“演示待核验”；只有前者确认了公开发布记录，二者都不等同于逐条临床内容审查。详见 [来源治理说明](docs/SOURCE_GOVERNANCE.md)。
+
 ## 项目结构
 
 ```text
@@ -201,6 +213,13 @@ Medical_Knowledge_Graph/
 
 ```powershell
 python -m pytest -q
+```
+
+真实 Neo4j 端到端测试由 CI 自动运行；本地需要先完成图谱导入后执行：
+
+```powershell
+$env:E2E_NEO4J = "1"
+python -m pytest tests/test_e2e_neo4j.py -q
 ```
 
 运行演示级评估：

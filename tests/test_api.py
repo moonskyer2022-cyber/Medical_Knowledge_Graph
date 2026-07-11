@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
+from starlette.testclient import TestClient
 
 from api.main import app
 from api.qa import answer_question

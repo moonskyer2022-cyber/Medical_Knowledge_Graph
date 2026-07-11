@@ -1,8 +1,8 @@
 source_id,title,publisher,document_type,version,published_at,url,accessed_at,verification_status,notes
-SRC-001,中国高血压防治指南,待医学审核,clinical_guideline,unknown,unknown,unknown,2026-07-11,unverified_demo,演示数据来源名称；待补充正式版本与可访问链接
-SRC-002,中国2型糖尿病防治指南,待医学审核,clinical_guideline,unknown,unknown,unknown,2026-07-11,unverified_demo,演示数据来源名称；待补充正式版本与可访问链接
-SRC-003,中国血脂异常防治指南,待医学审核,clinical_guideline,unknown,unknown,unknown,2026-07-11,unverified_demo,演示数据来源名称；待补充正式版本与可访问链接
+SRC-001,中国高血压防治指南,中国高血压防治指南修订委员会,clinical_guideline,2018年修订版,2019,https://www.chlonline.cn/cn/index/4316_1032156_50382,2026-07-11,metadata_verified,已核验公开指南记录；尚未完成逐条临床内容审查
+SRC-002,中国2型糖尿病防治指南,中华医学会糖尿病学分会,clinical_guideline,2020年版,2021-04,https://rs.yiigle.com/CN115791202104/1315489.htm,2026-07-11,metadata_verified,已核验公开指南记录；尚未完成逐条临床内容审查
+SRC-003,中国血脂管理指南（2023年）,国家心血管病专家委员会、中华医学会心血管病学分会,clinical_guideline,2023年,2023-03,https://csc.cma.org.cn/art/2023/3/28/art_619_50122.html,2026-07-11,metadata_verified,已核验公开指南记录；尚未完成逐条临床内容审查
 SRC-004,冠心病二级预防指南,待医学审核,clinical_guideline,unknown,unknown,unknown,2026-07-11,unverified_demo,演示数据来源名称；待补充正式版本与可访问链接
-SRC-005,胃食管反流病诊疗共识,待医学审核,clinical_consensus,unknown,unknown,unknown,2026-07-11,unverified_demo,演示数据来源名称；待补充正式版本与可访问链接
+SRC-005,中国胃食管反流病多学科诊疗共识2022（一）,中国医疗保健国际交流促进会胃食管反流病学分会,clinical_consensus,2022（一）,2022-05,https://zhwsgflbdzzz.cma-cmc.com.cn/CN/10.3877/cma.j.issn.2095-8765.2022.02.001,2026-07-11,metadata_verified,已核验公开共识记录；尚未完成逐条临床内容审查
 SRC-006,稳定型心绞痛诊疗指南,待医学审核,clinical_guideline,unknown,unknown,unknown,2026-07-11,unverified_demo,演示数据来源名称；待补充正式版本与可访问链接
 SRC-007,动脉粥样硬化防治指南,待医学审核,clinical_guideline,unknown,unknown,unknown,2026-07-11,unverified_demo,演示数据来源名称；待补充正式版本与可访问链接
