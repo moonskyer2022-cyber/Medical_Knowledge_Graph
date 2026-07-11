@@ -22,6 +22,7 @@ def _citation(index: int, title: str, locator: str, claim: str, source_type: str
             "source_id": source["source_id"], "publisher": source["publisher"],
             "version": source["version"], "published_at": source["published_at"],
             "url": source["url"], "verification_status": source["verification_status"],
+            "content_review_status": source["content_review_status"],
         })
     return citation
 

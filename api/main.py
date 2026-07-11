@@ -1,23 +1,28 @@
 """Pharma knowledge graph recommendation API."""
 
 import os
+import time
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from neo4j import GraphDatabase
 from pydantic import BaseModel, Field
 
 from api import cypher as cq
+from api.audit import append_audit_event, recent_audit_events
+from api.auth import AuthUser, AuthenticationError, authentication_enabled, issue_token, user_from_authorization, verify_credentials
 from api.graph_builder import build_disease_graph, build_drug_graph
 from api.qa import answer_question
 from api.rag import build_grounded_response
 from api.safety import assess_question, safety_response
+from api.source_registry import get_source_by_id, list_source_reviews, load_source_registry, record_source_review
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
@@ -59,6 +64,45 @@ class QARequest(BaseModel):
     question: str = Field(..., min_length=2, max_length=1000)
 
 
+class TokenRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=100)
+    password: str = Field(..., min_length=1, max_length=256)
+
+
+class SourceReviewRequest(BaseModel):
+    review_type: str = Field(..., pattern="^(metadata|clinical_content)$")
+    outcome: str = Field(..., pattern="^(approved|needs_revision|rejected)$")
+    evidence_url: str = Field("", max_length=2000)
+    notes: str = Field("", max_length=4000)
+    next_review_due: str = Field("", max_length=20)
+
+
+PUBLIC_PATHS = {"/", "/api", "/health", "/docs", "/openapi.json", "/auth/token"}
+
+
+@app.middleware("http")
+async def authentication_and_audit(request: Request, call_next):
+    request_id = uuid.uuid4().hex
+    started = time.perf_counter()
+    user = AuthUser("anonymous", ())
+    path = request.url.path
+    protected = path not in PUBLIC_PATHS and not path.startswith("/static")
+    if authentication_enabled() and protected:
+        try:
+            user = user_from_authorization(request.headers.get("Authorization"))
+        except AuthenticationError as exc:
+            response = JSONResponse(status_code=401, content={"detail": str(exc)})
+            response.headers["X-Request-ID"] = request_id
+            append_audit_event({"request_id": request_id, "user": "anonymous", "action": path, "method": request.method, "status_code": 401, "duration_ms": round((time.perf_counter() - started) * 1000, 2)})
+            return response
+    request.state.user = user
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    if protected:
+        append_audit_event({"request_id": request_id, "user": user.username, "roles": list(user.roles), "action": path, "method": request.method, "status_code": response.status_code, "duration_ms": round((time.perf_counter() - started) * 1000, 2)})
+    return response
+
+
 def resolve_drug_ids(session, names: list[str]) -> list[str]:
     ids: list[str] = []
     for name in names:
@@ -83,7 +127,7 @@ def api_root() -> dict:
         "endpoints": [
             "/health", "/stats", "/recommend", "/drug", "/graph",
             "/diseases", "/drugs", "/interactions/check", "/interactions",
-            "/contraindications", "/comorbidity", "/path", "/qa",
+            "/contraindications", "/comorbidity", "/path", "/qa", "/auth/token", "/sources", "/audit/recent",
         ],
         "disclaimer": "本系统仅供辅助参考，不能替代专业医疗决策。",
     }
@@ -96,6 +140,57 @@ def health() -> dict:
         return {"status": "ok", "neo4j": URI}
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/auth/token")
+def create_token(body: TokenRequest) -> dict:
+    if not authentication_enabled():
+        raise HTTPException(status_code=409, detail="authentication is disabled")
+    try:
+        user = verify_credentials(body.username, body.password)
+        append_audit_event({"user": user.username, "action": "/auth/token", "method": "POST", "status_code": 200, "roles": list(user.roles)})
+        return {"access_token": issue_token(user), "token_type": "bearer", "roles": user.roles}
+    except AuthenticationError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
+@app.get("/audit/recent")
+def audit_recent(request: Request, limit: int = Query(50, ge=1, le=200)) -> dict:
+    user: AuthUser = request.state.user
+    if not authentication_enabled() or "admin" not in user.roles:
+        raise HTTPException(status_code=403, detail="administrator role required")
+    events = recent_audit_events(limit)
+    return {"count": len(events), "events": events}
+
+
+@app.get("/sources")
+def sources() -> dict:
+    registry = list(load_source_registry().values())
+    return {"count": len(registry), "sources": registry}
+
+
+@app.get("/sources/{source_id}/reviews")
+def source_reviews(source_id: str) -> dict:
+    if not get_source_by_id(source_id):
+        raise HTTPException(status_code=404, detail=f"Source not found: {source_id}")
+    reviews = list_source_reviews(source_id)
+    return {"source_id": source_id, "count": len(reviews), "reviews": reviews}
+
+
+@app.post("/sources/{source_id}/reviews")
+def review_source(source_id: str, body: SourceReviewRequest, request: Request) -> dict:
+    user: AuthUser = request.state.user
+    if not authentication_enabled() or "admin" not in user.roles:
+        raise HTTPException(status_code=403, detail="administrator role required")
+    if body.review_type == "clinical_content" and not ({"admin", "clinical_reviewer"} & set(user.roles)):
+        raise HTTPException(status_code=403, detail="clinical reviewer role required")
+    if body.review_type == "metadata" and not ({"admin", "data_steward"} & set(user.roles)):
+        raise HTTPException(status_code=403, detail="data steward role required")
+    try:
+        review_id, source = record_source_review(source_id, body.review_type, user.username, "clinical_reviewer" if body.review_type == "clinical_content" else "data_steward", body.outcome, body.evidence_url, body.notes, body.next_review_due)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"review_id": review_id, "source": source}
 
 
 @app.get("/stats")

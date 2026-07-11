@@ -14,3 +14,7 @@
 ## 发布门槛
 
 任何来源从 `unverified_demo` 提升到 `metadata_verified` 前，必须更新来源登记表并提供可审计链接。若要作为临床决策支持的证据，还必须完成领域专家的内容审查并记录审查结论、审查人和日期。
+
+## 审核操作
+
+审核员可通过管理员 API 提交 `metadata` 或 `clinical_content` 审核；系统会校验角色、审核结论和已批准记录的证据 URL，并将每次决定追加到 `data/source_reviews.csv`。接口和 CLI 共用同一套持久化逻辑，避免审核状态分叉。

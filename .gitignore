@@ -9,6 +9,7 @@ __pycache__/
 .coverage
 htmlcov/
 .pydeps/
+data/audit/*.jsonl
 
 .DS_Store
 Thumbs.db

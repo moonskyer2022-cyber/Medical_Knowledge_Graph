@@ -167,6 +167,20 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/qa `
 
 详细契约和引用边界见 [docs/GRAPH_RAG.md](docs/GRAPH_RAG.md)。
 
+### 认证、审计与来源审核
+
+启用认证与审计时，在 `.env` 中设置 `AUTH_ENABLED=true`、至少 32 位的 `AUTH_SECRET`、演示账号和角色（`admin`、`data_steward`、`clinical_reviewer`），并设置 `AUDIT_ENABLED=true`。通过 `POST /auth/token` 获取 Bearer Token；管理员可读取 `/audit/recent`，来源审核通过 `GET /sources`、`GET /sources/{source_id}/reviews` 和 `POST /sources/{source_id}/reviews` 完成。审计日志不记录问题正文、密码或 Token。
+
+也可以使用 CLI 记录审核决定：
+
+```powershell
+python scripts/review_sources.py --source-id SRC-001 --review-type metadata `
+  --reviewer-id reviewer-001 --reviewer-role data_steward --outcome approved `
+  --evidence-url https://example.com/verified-source --notes "核验公开版本"
+```
+
+临床内容审核必须使用 `clinical_reviewer` 角色；元数据审核必须使用 `data_steward` 角色。审核记录写入 `data/source_reviews.csv`，最新状态同步回 `data/source_registry.csv`。
+
 ## 数据模型与数据流
 
 ### 核心实体
@@ -196,7 +210,12 @@ Medical_Knowledge_Graph/
 ├── data/
 │   ├── raw/               # 原始 CSV
 │   ├── clean/             # 清洗后的 CSV
-│   └── source_registry.csv # 来源登记与审核状态
+│   ├── source_registry.csv # 来源登记与审核状态
+│   └── source_reviews.csv  # 审核决定历史
+├── config/                # 版本化安全策略
+├── data/audit/             # 审计日志（默认不写入 Git）
+├── api/auth.py             # Bearer Token 与角色
+├── api/audit.py            # 隐私最小化审计
 ├── config/                # 版本化安全策略
 ├── docs/                  # 本体、Graph-RAG 与补充技术文档
 ├── scripts/               # 清洗、导入、启动和评估脚本
