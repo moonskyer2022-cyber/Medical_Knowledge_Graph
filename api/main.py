@@ -17,7 +17,7 @@ from api import cypher as cq
 from api.graph_builder import build_disease_graph, build_drug_graph
 from api.qa import answer_question
 from api.rag import build_grounded_response
-from api.safety import assess_question
+from api.safety import assess_question, safety_response
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
@@ -265,7 +265,7 @@ def qa(body: QARequest) -> dict:
             "question": body.question.strip(), "intent": "safety_blocked", "answer": safety.message,
             "data": {}, "citations": [],
             "retrieval": {"strategy": "none", "grounded": False, "context_records": 0},
-            "safety": safety.as_dict(),
+            "safety": safety_response(safety),
         }
     with driver.session() as session:
         def resolve_drugs(name: str) -> list[dict[str, Any]]:
@@ -299,5 +299,5 @@ def qa(body: QARequest) -> dict:
             body.question, resolve_drugs, check_ix, recommend, drug_info, check_ci
         )
         result = build_grounded_response(result)
-        result["safety"] = safety.as_dict()
+        result["safety"] = safety_response(safety)
         return result

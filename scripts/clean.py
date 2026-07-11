@@ -1,10 +1,16 @@
 """Clean raw CSV data and export to data/clean/."""
 
+import sys
 from pathlib import Path
 
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from api.source_registry import validate_source_titles
+
 RAW = ROOT / "data" / "raw"
 CLEAN = ROOT / "data" / "clean"
 
@@ -135,6 +141,13 @@ def validate_referential_integrity(
     return warnings
 
 
+def validate_source_provenance(relations: pd.DataFrame, plans: pd.DataFrame) -> list[str]:
+    """Require every guideline label referenced by graph facts to be registered."""
+    titles = set(relations["source"].dropna()) | set(plans["source"].dropna())
+    missing = validate_source_titles({title.strip() for title in titles})
+    return [f"unregistered source: {title}" for title in missing]
+
+
 def main() -> None:
     CLEAN.mkdir(parents=True, exist_ok=True)
 
@@ -152,6 +165,9 @@ def main() -> None:
     atc_classes = clean_atc(load_csv("atc_classes.csv"))
 
     warnings = validate_referential_integrity(drugs, diseases, relations, plans, plan_drugs)
+    provenance_errors = validate_source_provenance(relations, plans)
+    if provenance_errors:
+        raise ValueError("Source provenance validation failed: " + "; ".join(provenance_errors))
 
     outputs = {
         "drugs.csv": drugs,

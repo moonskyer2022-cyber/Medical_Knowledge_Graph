@@ -20,7 +20,8 @@ def test_recommendation_has_guideline_citation():
         "data": {"results": [{"disease": "高血压", "plan": "一线方案", "source": "中国高血压防治指南"}]},
     })
     assert response["retrieval"]["strategy"] == "cypher_graph_rag"
-    assert response["citations"] == [{
-        "id": "S1", "title": "中国高血压防治指南", "locator": "Plan.source",
-        "claim": "高血压：一线方案", "source_type": "clinical_guideline",
-    }]
+    citation = response["citations"][0]
+    assert citation["id"] == "S1"
+    assert citation["title"] == "中国高血压防治指南"
+    assert citation["source_id"] == "SRC-001"
+    assert citation["verification_status"] == "unverified_demo"

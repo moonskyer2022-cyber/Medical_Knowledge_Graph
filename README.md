@@ -170,6 +170,7 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/qa `
 ### 数据处理原则
 
 - `data/raw/` 保存输入数据；`data/clean/` 保存可导入的清洗结果；
+- `data/source_registry.csv` 记录来源 ID、发布方、版本、链接、获取日期与审核状态；清洗时会拒绝未登记的指南来源；
 - 清洗脚本去重、规范文本、校验关键外键并剔除无效关系；
 - 图导入脚本使用 `MERGE` 保证节点与关系幂等；
 - 图谱模式与查询定义分别位于 `cypher/schema.cypher` 和 `api/cypher.py`。
@@ -182,7 +183,9 @@ Medical_Knowledge_Graph/
 ├── cypher/                # Neo4j schema 与查询定义
 ├── data/
 │   ├── raw/               # 原始 CSV
-│   └── clean/             # 清洗后的 CSV
+│   ├── clean/             # 清洗后的 CSV
+│   └── source_registry.csv # 来源登记与审核状态
+├── config/                # 版本化安全策略
 ├── docs/                  # 本体、Graph-RAG 与补充技术文档
 ├── scripts/               # 清洗、导入、启动和评估脚本
 ├── tests/                 # API、RAG 与安全策略测试

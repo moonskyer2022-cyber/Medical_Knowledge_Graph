@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from api.source_registry import get_source
+
 
 LOCAL_SOURCES = {
     "interaction_check": ("药物相互作用数据集", "data/clean/drug_interactions.csv"),
@@ -13,7 +15,15 @@ LOCAL_SOURCES = {
 
 
 def _citation(index: int, title: str, locator: str, claim: str, source_type: str) -> dict[str, str]:
-    return {"id": f"S{index}", "title": title or "未标注来源", "locator": locator, "claim": claim, "source_type": source_type}
+    citation = {"id": f"S{index}", "title": title or "未标注来源", "locator": locator, "claim": claim, "source_type": source_type}
+    source = get_source(title) if title else None
+    if source:
+        citation.update({
+            "source_id": source["source_id"], "publisher": source["publisher"],
+            "version": source["version"], "published_at": source["published_at"],
+            "url": source["url"], "verification_status": source["verification_status"],
+        })
+    return citation
 
 
 def build_grounded_response(result: dict[str, Any]) -> dict[str, Any]:
