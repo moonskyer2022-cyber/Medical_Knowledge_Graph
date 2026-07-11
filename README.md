@@ -187,6 +187,12 @@ python scripts/review_sources.py --source-id SRC-001 --review-type metadata `
 
 企业级运行参数还包括：`RATE_LIMIT_ENABLED`、`RATE_LIMIT_REQUESTS`、`RATE_LIMIT_WINDOW_SECONDS`、`LOG_JSON`。可用 `python scripts/data_quality.py` 生成原始 CSV 数据质量报告；该命令只读数据，不会覆盖清洗结果。
 
+如果本地同时存在其他 Git 远端，建议将项目主分支上游明确设置为本仓库：`git branch --set-upstream-to=medical/main main`，避免误将提交推送到无关仓库。
+
+### 当前版本状态
+
+当前版本已覆盖知识图谱查询、Graph-RAG 引用、安全护栏、用户认证、来源审核、审计日志、请求可观测性、限流和数据质量检查。质量门禁结果为 `24 passed, 1 skipped`；其中跳过项为需要预置 Neo4j 实例的本地 E2E 测试，CI 会在 Neo4j 服务容器中执行该测试。
+
 ## 数据模型与数据流
 
 ### 核心实体
